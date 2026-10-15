@@ -10,6 +10,7 @@ public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbCo
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Material> Materials => Set<Material>();
     public DbSet<BillOfMaterialItem> BillOfMaterialItems => Set<BillOfMaterialItem>();
+    public DbSet<BillOfMaterialRevision> BillOfMaterialRevisions => Set<BillOfMaterialRevision>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -18,5 +19,6 @@ public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbCo
         modelBuilder.ApplyConfiguration(new ProductConfiguration());
         modelBuilder.ApplyConfiguration(new MaterialConfiguration());
         modelBuilder.ApplyConfiguration(new BillOfMaterialItemConfiguration());
+        modelBuilder.ApplyConfiguration(new BillOfMaterialRevisionConfiguration());
     }
 }

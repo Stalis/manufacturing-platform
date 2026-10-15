@@ -24,9 +24,8 @@ namespace Catalog.Api.Persistence.Migrations
 
             modelBuilder.Entity("Catalog.Core.Models.BillOfMaterialItem", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                    b.Property<Guid>("RevisionId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("MaterialId")
                         .HasColumnType("uuid");
@@ -38,14 +37,36 @@ namespace Catalog.Api.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
 
-                    b.HasKey("Id");
+                    b.HasKey("RevisionId", "MaterialId");
 
                     b.HasIndex("MaterialId");
 
-                    b.HasIndex("ProductId", "MaterialId")
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("RevisionId", "MaterialId")
                         .IsUnique();
 
                     b.ToTable("BillOfMaterialItems", (string)null);
+                });
+
+            modelBuilder.Entity("Catalog.Core.Models.BillOfMaterialRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "Revision")
+                        .IsUnique();
+
+                    b.ToTable("BillOfMaterialRevisions", (string)null);
                 });
 
             modelBuilder.Entity("Manufacturing.Core.Models.Material", b =>
@@ -114,9 +135,17 @@ namespace Catalog.Api.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Catalog.Core.Models.BillOfMaterialRevision", "Revision")
+                        .WithMany()
+                        .HasForeignKey("RevisionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Material");
 
                     b.Navigation("Product");
+
+                    b.Navigation("Revision");
                 });
 #pragma warning restore 612, 618
         }

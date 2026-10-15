@@ -4,8 +4,8 @@ namespace Catalog.Core.Models;
 
 public class BillOfMaterialItem
 {
-    public Guid Id { get; init; } = Guid.CreateVersion7();
-    public Guid ProductId { get; init; }
+    public Guid RevisionId { get; init; }
+    public BillOfMaterialRevision Revision { get; init; } = null!;
     public Product Product { get; init; } = null!;
     public required Guid MaterialId { get; init; }
     public Material Material { get; init; } = null!;

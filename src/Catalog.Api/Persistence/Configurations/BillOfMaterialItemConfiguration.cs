@@ -10,16 +10,12 @@ class BillOfMaterialItemConfiguration : IEntityTypeConfiguration<BillOfMaterialI
     {
         builder.ToTable("BillOfMaterialItems");
 
-        builder.HasKey(x => x.Id);
-        builder.HasIndex(x => new { x.ProductId, x.MaterialId }).IsUnique();
+        builder.HasKey(x => new { x.RevisionId, x.MaterialId });
+        builder.HasIndex(x => new { x.RevisionId, x.MaterialId }).IsUnique();
 
-        builder.Property(x => x.Id)
-            .HasColumnName("id")
-            .ValueGeneratedNever();
-
-        builder.HasOne(x => x.Product)
+        builder.HasOne(x => x.Revision)
             .WithMany()
-            .HasForeignKey(x => x.ProductId)
+            .HasForeignKey(x => x.RevisionId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(x => x.Material)
