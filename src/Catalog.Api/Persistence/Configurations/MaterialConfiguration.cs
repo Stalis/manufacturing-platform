@@ -11,6 +11,7 @@ class MaterialConfiguration : IEntityTypeConfiguration<Material>
         builder.ToTable("Materials");
 
         builder.HasKey(x => x.Id);
+        builder.HasIndex(x => x.SKU).IsUnique();
 
         builder.Property(x => x.Id)
             .HasColumnName("id")

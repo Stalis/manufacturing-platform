@@ -11,6 +11,7 @@ class BillOfMaterialItemConfiguration : IEntityTypeConfiguration<BillOfMaterialI
         builder.ToTable("BillOfMaterialItems");
 
         builder.HasKey(x => x.Id);
+        builder.HasIndex(x => new { x.ProductId, x.MaterialId }).IsUnique();
 
         builder.Property(x => x.Id)
             .HasColumnName("id")

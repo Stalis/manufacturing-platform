@@ -42,7 +42,8 @@ namespace Catalog.Api.Persistence.Migrations
 
                     b.HasIndex("MaterialId");
 
-                    b.HasIndex("ProductId");
+                    b.HasIndex("ProductId", "MaterialId")
+                        .IsUnique();
 
                     b.ToTable("BillOfMaterialItems", (string)null);
                 });
@@ -69,6 +70,9 @@ namespace Catalog.Api.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SKU")
+                        .IsUnique();
+
                     b.ToTable("Materials", (string)null);
                 });
 
@@ -89,6 +93,9 @@ namespace Catalog.Api.Persistence.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SKU")
+                        .IsUnique();
 
                     b.ToTable("Products", (string)null);
                 });

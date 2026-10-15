@@ -3,8 +3,8 @@ namespace Manufacturing.Core.Models;
 public class Material
 {
     public Guid Id { get; init; } = Guid.CreateVersion7();
-    public required string SKU { get; init; }
-    public required string Name { get; init; }
+    public required string SKU { get; set; }
+    public required string Name { get; set; }
 
-    public required MeasurementUnit MeasurementUnit { get; init; }
+    public required MeasurementUnit MeasurementUnit { get; set; }
 }

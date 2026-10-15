@@ -9,5 +9,5 @@ public class BillOfMaterialItem
     public Product Product { get; init; } = null!;
     public required Guid MaterialId { get; init; }
     public Material Material { get; init; } = null!;
-    public required int Quantity { get; init; }
+    public required int Quantity { get; set; }
 }

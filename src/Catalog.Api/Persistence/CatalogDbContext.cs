@@ -1,3 +1,4 @@
+using Catalog.Api.Persistence.Configurations;
 using Catalog.Core.Models;
 using Manufacturing.Core.Models;
 using Microsoft.EntityFrameworkCore;
@@ -14,8 +15,8 @@ public class CatalogDbContext(DbContextOptions<CatalogDbContext> options) : DbCo
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.ApplyConfiguration<Product>(new Configurations.ProductConfiguration());
-        modelBuilder.ApplyConfiguration<Material>(new Configurations.MaterialConfiguration());
-        modelBuilder.ApplyConfiguration<BillOfMaterialItem>(new Configurations.BillOfMaterialItemConfiguration());
+        modelBuilder.ApplyConfiguration(new ProductConfiguration());
+        modelBuilder.ApplyConfiguration(new MaterialConfiguration());
+        modelBuilder.ApplyConfiguration(new BillOfMaterialItemConfiguration());
     }
 }
