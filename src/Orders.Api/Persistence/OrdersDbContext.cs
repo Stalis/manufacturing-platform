@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Orders.Core;
+using Orders.Core.Models;
 
 namespace Orders.Api.Persistence;
 
@@ -8,6 +8,7 @@ public class OrdersDbContext(
 ) : DbContext(options)
 {
     public DbSet<Order> Orders => Set<Order>();
+    public DbSet<BomSnapshot> BomSnapshots => Set<BomSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

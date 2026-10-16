@@ -1,3 +1,5 @@
+using Orders.Core.Models;
+
 namespace Orders.Api.Endpoints;
 
 using Microsoft.AspNetCore.Routing;

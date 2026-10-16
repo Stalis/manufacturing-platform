@@ -5,6 +5,7 @@
 
 # dotenv files
 .env
+.env*
 
 # User-specific files
 *.rsuser
@@ -480,3 +481,5 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+*.pgpass

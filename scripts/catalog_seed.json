@@ -1,0 +1,141 @@
+{
+  "resistors": {
+    "measurementUnit": "Each",
+    "e24": [10, 11, 12, 13, 15, 16, 18, 20, 22, 24, 27, 30, 33, 36, 39, 43, 47, 51, 56, 62, 68, 75, 82, 91],
+    "decades": [0, 1, 2, 3, 4, 5],
+    "packages": [
+      { "name": "THT", "skuPrefix": "THT-R" },
+      { "name": "SMD 1206", "skuPrefix": "SMD1206-R" },
+      { "name": "SMD 0805", "skuPrefix": "SMD0805-R" }
+    ]
+  },
+  "transistors": {
+    "measurementUnit": "Each",
+    "families": [
+      { "name": "BJT NPN", "skuPrefix": "BJT-NPN", "count": 5 },
+      { "name": "BJT PNP", "skuPrefix": "BJT-PNP", "count": 5 },
+      { "name": "MOSFET N-channel", "skuPrefix": "MOSFET-N", "count": 5 },
+      { "name": "MOSFET P-channel", "skuPrefix": "MOSFET-P", "count": 5 }
+    ]
+  },
+  "wires": {
+    "measurementUnit": "Meter",
+    "awg": [20, 30],
+    "colors": ["Black", "Red", "Blue", "Green", "Yellow", "White", "Orange", "Brown"]
+  },
+  "pcbs": { "measurementUnit": "SquareCentimeter", "layers": [1, 2, 3, 4, 5] },
+  "microcontrollers": { "measurementUnit": "Each", "cores": [1, 2, 3, 4], "wordSizes": [8, 16, 32] },
+  "products": [
+    {
+      "sku": "PRODUCT-CONTROL-BOARD", "name": "Synthetic Control Board", "revision": 1,
+      "materials": [
+        { "sku": "PCB-2L", "quantity": 80 },
+        { "sku": "MCU-1C-32B", "quantity": 1 },
+        { "sku": "THT-R-10K", "quantity": 4 },
+        { "sku": "WIRE-24AWG-BLACK", "quantity": 2 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-POWER-BOARD", "name": "Synthetic Power Board", "revision": 1,
+      "materials": [
+        { "sku": "PCB-4L", "quantity": 120 },
+        { "sku": "MCU-2C-16B", "quantity": 1 },
+        { "sku": "MOSFET-N-SYN-001", "quantity": 2 },
+        { "sku": "WIRE-20AWG-RED", "quantity": 3 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-SENSOR-MODULE", "name": "Synthetic Sensor Module", "revision": 1,
+      "materials": [
+        { "sku": "PCB-2L", "quantity": 25 },
+        { "sku": "MCU-1C-8B", "quantity": 1 },
+        { "sku": "THT-R-100K", "quantity": 6 },
+        { "sku": "SMD1206-R-1K", "quantity": 4 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-MOTOR-DRIVER", "name": "Synthetic Motor Driver", "revision": 1,
+      "materials": [
+        { "sku": "PCB-3L", "quantity": 100 },
+        { "sku": "MCU-2C-32B", "quantity": 1 },
+        { "sku": "MOSFET-N-SYN-002", "quantity": 4 },
+        { "sku": "MOSFET-P-SYN-001", "quantity": 2 },
+        { "sku": "WIRE-22AWG-BLUE", "quantity": 3 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-LED-CONTROLLER", "name": "Synthetic LED Controller", "revision": 1,
+      "materials": [
+        { "sku": "PCB-1L", "quantity": 40 },
+        { "sku": "MCU-1C-16B", "quantity": 1 },
+        { "sku": "SMD0805-R-330", "quantity": 12 },
+        { "sku": "WIRE-26AWG-GREEN", "quantity": 2 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-IO-EXPANDER", "name": "Synthetic I/O Expander", "revision": 1,
+      "materials": [
+        { "sku": "PCB-2L", "quantity": 60 },
+        { "sku": "MCU-2C-8B", "quantity": 1 },
+        { "sku": "SMD1206-R-10K", "quantity": 8 },
+        { "sku": "BJT-NPN-SYN-001", "quantity": 2 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-COMMUNICATION-MODULE", "name": "Synthetic Communication Module", "revision": 1,
+      "materials": [
+        { "sku": "PCB-4L", "quantity": 50 },
+        { "sku": "MCU-3C-32B", "quantity": 1 },
+        { "sku": "SMD0805-R-1K", "quantity": 6 },
+        { "sku": "WIRE-28AWG-WHITE", "quantity": 2 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-ANALOG-UNIT", "name": "Synthetic Analog Unit", "revision": 1,
+      "materials": [
+        { "sku": "PCB-2L", "quantity": 70 },
+        { "sku": "MCU-3C-16B", "quantity": 1 },
+        { "sku": "THT-R-1M", "quantity": 3 },
+        { "sku": "BJT-PNP-SYN-001", "quantity": 2 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-SECURITY-MODULE", "name": "Synthetic Security Module", "revision": 1,
+      "materials": [
+        { "sku": "PCB-5L", "quantity": 64 },
+        { "sku": "MCU-4C-32B", "quantity": 1 },
+        { "sku": "SMD1206-R-100K", "quantity": 8 },
+        { "sku": "MOSFET-P-SYN-002", "quantity": 2 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-POWER-SUPPLY", "name": "Synthetic Power Supply", "revision": 1,
+      "materials": [
+        { "sku": "PCB-3L", "quantity": 150 },
+        { "sku": "MCU-1C-8B", "quantity": 1 },
+        { "sku": "MOSFET-N-SYN-003", "quantity": 3 },
+        { "sku": "BJT-PNP-SYN-002", "quantity": 2 },
+        { "sku": "WIRE-20AWG-BLACK", "quantity": 4 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-TEST-FIXTURE", "name": "Synthetic Test Fixture", "revision": 1,
+      "materials": [
+        { "sku": "PCB-1L", "quantity": 200 },
+        { "sku": "MCU-2C-16B", "quantity": 1 },
+        { "sku": "THT-R-1K", "quantity": 10 },
+        { "sku": "WIRE-30AWG-YELLOW", "quantity": 5 }
+      ]
+    },
+    {
+      "sku": "PRODUCT-ROBOT-CONTROLLER", "name": "Synthetic Robot Controller", "revision": 1,
+      "materials": [
+        { "sku": "PCB-5L", "quantity": 160 },
+        { "sku": "MCU-4C-32B", "quantity": 1 },
+        { "sku": "MOSFET-N-SYN-004", "quantity": 4 },
+        { "sku": "MOSFET-P-SYN-003", "quantity": 2 },
+        { "sku": "WIRE-22AWG-ORANGE", "quantity": 4 }
+      ]
+    }
+  ]
+}

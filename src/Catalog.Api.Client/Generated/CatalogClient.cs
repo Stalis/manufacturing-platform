@@ -119,21 +119,30 @@ namespace Manufacturing.Catalog.Client
 
         /// <returns>OK</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAsync(System.Guid productId);
+        System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAndRevisionAsync(System.Guid productId, long revision);
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAsync(System.Guid productId, System.Threading.CancellationToken cancellationToken);
+        System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAndRevisionAsync(System.Guid productId, long revision, System.Threading.CancellationToken cancellationToken);
+
+        /// <returns>OK</returns>
+        /// <exception cref="ApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAndRevisionIdAsync(System.Guid productId, System.Guid revisionId);
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="ApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAndRevisionIdAsync(System.Guid productId, System.Guid revisionId, System.Threading.CancellationToken cancellationToken);
 
         /// <returns>No Content</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task DeleteBillOfMaterialAsync(System.Guid productId);
+        System.Threading.Tasks.Task DeleteBillOfMaterialAsync(System.Guid productId, System.Guid revisionId);
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>No Content</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task DeleteBillOfMaterialAsync(System.Guid productId, System.Threading.CancellationToken cancellationToken);
+        System.Threading.Tasks.Task DeleteBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, System.Threading.CancellationToken cancellationToken);
 
         /// <returns>Created</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -155,30 +164,30 @@ namespace Manufacturing.Catalog.Client
 
         /// <returns>Created</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task AddItemToBillOfMaterialAsync(System.Guid productId, Record body);
+        System.Threading.Tasks.Task AddItemToBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, Record body);
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>Created</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task AddItemToBillOfMaterialAsync(System.Guid productId, Record body, System.Threading.CancellationToken cancellationToken);
+        System.Threading.Tasks.Task AddItemToBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, Record body, System.Threading.CancellationToken cancellationToken);
 
         /// <returns>No Content</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task UpdateItemInBillOfMaterialAsync(System.Guid productId, Record body);
-
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <returns>No Content</returns>
-        /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task UpdateItemInBillOfMaterialAsync(System.Guid productId, Record body, System.Threading.CancellationToken cancellationToken);
-
-        /// <returns>No Content</returns>
-        /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task RemoveItemFromBillOfMaterialAsync(System.Guid productId, System.Guid materialId);
+        System.Threading.Tasks.Task UpdateItemInBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, Record body);
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>No Content</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task RemoveItemFromBillOfMaterialAsync(System.Guid productId, System.Guid materialId, System.Threading.CancellationToken cancellationToken);
+        System.Threading.Tasks.Task UpdateItemInBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, Record body, System.Threading.CancellationToken cancellationToken);
+
+        /// <returns>No Content</returns>
+        /// <exception cref="ApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task RemoveItemFromBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, System.Guid materialId);
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>No Content</returns>
+        /// <exception cref="ApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task RemoveItemFromBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, System.Guid materialId, System.Threading.CancellationToken cancellationToken);
 
     }
 
@@ -239,7 +248,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/materials/{id}"
                     urlBuilder_.Append("api/catalog/materials/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
@@ -326,7 +335,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Method = new System.Net.Http.HttpMethod("DELETE");
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/materials/{id}"
                     urlBuilder_.Append("api/catalog/materials/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
@@ -406,7 +415,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/materials"
                     urlBuilder_.Append("api/catalog/materials");
 
@@ -491,7 +500,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/materials"
                     urlBuilder_.Append("api/catalog/materials");
 
@@ -587,7 +596,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Method = new System.Net.Http.HttpMethod("PUT");
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/materials"
                     urlBuilder_.Append("api/catalog/materials");
 
@@ -672,7 +681,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/api/products"
                     urlBuilder_.Append("api/catalog/api/products");
 
@@ -757,7 +766,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/api/products"
                     urlBuilder_.Append("api/catalog/api/products");
 
@@ -844,7 +853,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/api/products/{id}"
                     urlBuilder_.Append("api/catalog/api/products/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
@@ -938,7 +947,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Method = new System.Net.Http.HttpMethod("PUT");
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/api/products/{id}"
                     urlBuilder_.Append("api/catalog/api/products/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
@@ -1026,7 +1035,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Method = new System.Net.Http.HttpMethod("DELETE");
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/api/products/{id}"
                     urlBuilder_.Append("api/catalog/api/products/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
@@ -1086,18 +1095,21 @@ namespace Manufacturing.Catalog.Client
 
         /// <returns>OK</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAsync(System.Guid productId)
+        public virtual System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAndRevisionAsync(System.Guid productId, long revision)
         {
-            return GetBillOfMaterialByProductIdAsync(productId, System.Threading.CancellationToken.None);
+            return GetBillOfMaterialByProductIdAndRevisionAsync(productId, revision, System.Threading.CancellationToken.None);
         }
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAsync(System.Guid productId, System.Threading.CancellationToken cancellationToken)
+        public virtual async System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAndRevisionAsync(System.Guid productId, long revision, System.Threading.CancellationToken cancellationToken)
         {
             if (productId == null)
                 throw new System.ArgumentNullException("productId");
+
+            if (revision == null)
+                throw new System.ArgumentNullException("revision");
 
             var client_ = _httpClient;
             var disposeClient_ = false;
@@ -1109,10 +1121,105 @@ namespace Manufacturing.Catalog.Client
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
-                    // Operation Path: "api/catalog/bill-of-material/{productId}"
+
+                    // Operation Path: "api/catalog/bill-of-material/{productId}/revisions/{revision}"
                     urlBuilder_.Append("api/catalog/bill-of-material/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(productId, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append("/revisions/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(revision, System.Globalization.CultureInfo.InvariantCulture)));
+
+                    PrepareRequest(client_, request_, urlBuilder_);
+
+                    var url_ = urlBuilder_.ToString();
+                    request_.RequestUri = new System.Uri(url_, System.UriKind.RelativeOrAbsolute);
+
+                    PrepareRequest(client_, request_, url_);
+
+                    var response_ = await client_.SendAsync(request_, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    var disposeResponse_ = true;
+                    try
+                    {
+                        var headers_ = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IEnumerable<string>>();
+                        foreach (var item_ in response_.Headers)
+                            headers_[item_.Key] = item_.Value;
+                        if (response_.Content != null && response_.Content.Headers != null)
+                        {
+                            foreach (var item_ in response_.Content.Headers)
+                                headers_[item_.Key] = item_.Value;
+                        }
+
+                        ProcessResponse(client_, response_);
+
+                        var status_ = (int)response_.StatusCode;
+                        if (status_ == 200)
+                        {
+                            var objectResponse_ = await ReadObjectResponseAsync<BillOfMaterial>(response_, headers_, cancellationToken).ConfigureAwait(false);
+                            if (objectResponse_.Object == null)
+                            {
+                                throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
+                            }
+                            return objectResponse_.Object;
+                        }
+                        else
+                        if (status_ == 404)
+                        {
+                            string responseText_ = ( response_.Content == null ) ? string.Empty : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new ApiException("Not Found", status_, responseText_, headers_, null);
+                        }
+                        else
+                        {
+                            var responseData_ = response_.Content == null ? null : await ReadAsStringAsync(response_.Content, cancellationToken).ConfigureAwait(false);
+                            throw new ApiException("The HTTP status code of the response was not expected (" + status_ + ").", status_, responseData_, headers_, null);
+                        }
+                    }
+                    finally
+                    {
+                        if (disposeResponse_)
+                            response_.Dispose();
+                    }
+                }
+            }
+            finally
+            {
+                if (disposeClient_)
+                    client_.Dispose();
+            }
+        }
+
+        /// <returns>OK</returns>
+        /// <exception cref="ApiException">A server side error occurred.</exception>
+        public virtual System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAndRevisionIdAsync(System.Guid productId, System.Guid revisionId)
+        {
+            return GetBillOfMaterialByProductIdAndRevisionIdAsync(productId, revisionId, System.Threading.CancellationToken.None);
+        }
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="ApiException">A server side error occurred.</exception>
+        public virtual async System.Threading.Tasks.Task<BillOfMaterial> GetBillOfMaterialByProductIdAndRevisionIdAsync(System.Guid productId, System.Guid revisionId, System.Threading.CancellationToken cancellationToken)
+        {
+            if (productId == null)
+                throw new System.ArgumentNullException("productId");
+
+            if (revisionId == null)
+                throw new System.ArgumentNullException("revisionId");
+
+            var client_ = _httpClient;
+            var disposeClient_ = false;
+            try
+            {
+                using (var request_ = new System.Net.Http.HttpRequestMessage())
+                {
+                    request_.Method = new System.Net.Http.HttpMethod("GET");
+                    request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
+
+                    var urlBuilder_ = new System.Text.StringBuilder();
+
+                    // Operation Path: "api/catalog/bill-of-material/{productId}/{revisionId}"
+                    urlBuilder_.Append("api/catalog/bill-of-material/");
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(productId, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append('/');
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(revisionId, System.Globalization.CultureInfo.InvariantCulture)));
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -1174,18 +1281,21 @@ namespace Manufacturing.Catalog.Client
 
         /// <returns>No Content</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual System.Threading.Tasks.Task DeleteBillOfMaterialAsync(System.Guid productId)
+        public virtual System.Threading.Tasks.Task DeleteBillOfMaterialAsync(System.Guid productId, System.Guid revisionId)
         {
-            return DeleteBillOfMaterialAsync(productId, System.Threading.CancellationToken.None);
+            return DeleteBillOfMaterialAsync(productId, revisionId, System.Threading.CancellationToken.None);
         }
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>No Content</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task DeleteBillOfMaterialAsync(System.Guid productId, System.Threading.CancellationToken cancellationToken)
+        public virtual async System.Threading.Tasks.Task DeleteBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, System.Threading.CancellationToken cancellationToken)
         {
             if (productId == null)
                 throw new System.ArgumentNullException("productId");
+
+            if (revisionId == null)
+                throw new System.ArgumentNullException("revisionId");
 
             var client_ = _httpClient;
             var disposeClient_ = false;
@@ -1196,10 +1306,12 @@ namespace Manufacturing.Catalog.Client
                     request_.Method = new System.Net.Http.HttpMethod("DELETE");
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
-                    // Operation Path: "api/catalog/bill-of-material/{productId}"
+
+                    // Operation Path: "api/catalog/bill-of-material/{productId}/{revisionId}"
                     urlBuilder_.Append("api/catalog/bill-of-material/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(productId, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append('/');
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(revisionId, System.Globalization.CultureInfo.InvariantCulture)));
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -1283,7 +1395,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/bill-of-material"
                     urlBuilder_.Append("api/catalog/bill-of-material");
 
@@ -1379,7 +1491,7 @@ namespace Manufacturing.Catalog.Client
                     request_.Method = new System.Net.Http.HttpMethod("PUT");
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
+
                     // Operation Path: "api/catalog/bill-of-material"
                     urlBuilder_.Append("api/catalog/bill-of-material");
 
@@ -1444,18 +1556,21 @@ namespace Manufacturing.Catalog.Client
 
         /// <returns>Created</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual System.Threading.Tasks.Task AddItemToBillOfMaterialAsync(System.Guid productId, Record body)
+        public virtual System.Threading.Tasks.Task AddItemToBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, Record body)
         {
-            return AddItemToBillOfMaterialAsync(productId, body, System.Threading.CancellationToken.None);
+            return AddItemToBillOfMaterialAsync(productId, revisionId, body, System.Threading.CancellationToken.None);
         }
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>Created</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task AddItemToBillOfMaterialAsync(System.Guid productId, Record body, System.Threading.CancellationToken cancellationToken)
+        public virtual async System.Threading.Tasks.Task AddItemToBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, Record body, System.Threading.CancellationToken cancellationToken)
         {
             if (productId == null)
                 throw new System.ArgumentNullException("productId");
+
+            if (revisionId == null)
+                throw new System.ArgumentNullException("revisionId");
 
             if (body == null)
                 throw new System.ArgumentNullException("body");
@@ -1473,10 +1588,12 @@ namespace Manufacturing.Catalog.Client
                     request_.Method = new System.Net.Http.HttpMethod("POST");
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
-                    // Operation Path: "api/catalog/bill-of-material/{productId}/items"
+
+                    // Operation Path: "api/catalog/bill-of-material/{productId}/{revisionId}/items"
                     urlBuilder_.Append("api/catalog/bill-of-material/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(productId, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append('/');
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(revisionId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/items");
 
                     PrepareRequest(client_, request_, urlBuilder_);
@@ -1540,18 +1657,21 @@ namespace Manufacturing.Catalog.Client
 
         /// <returns>No Content</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual System.Threading.Tasks.Task UpdateItemInBillOfMaterialAsync(System.Guid productId, Record body)
+        public virtual System.Threading.Tasks.Task UpdateItemInBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, Record body)
         {
-            return UpdateItemInBillOfMaterialAsync(productId, body, System.Threading.CancellationToken.None);
+            return UpdateItemInBillOfMaterialAsync(productId, revisionId, body, System.Threading.CancellationToken.None);
         }
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>No Content</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task UpdateItemInBillOfMaterialAsync(System.Guid productId, Record body, System.Threading.CancellationToken cancellationToken)
+        public virtual async System.Threading.Tasks.Task UpdateItemInBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, Record body, System.Threading.CancellationToken cancellationToken)
         {
             if (productId == null)
                 throw new System.ArgumentNullException("productId");
+
+            if (revisionId == null)
+                throw new System.ArgumentNullException("revisionId");
 
             if (body == null)
                 throw new System.ArgumentNullException("body");
@@ -1569,10 +1689,12 @@ namespace Manufacturing.Catalog.Client
                     request_.Method = new System.Net.Http.HttpMethod("PUT");
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
-                    // Operation Path: "api/catalog/bill-of-material/{productId}/items"
+
+                    // Operation Path: "api/catalog/bill-of-material/{productId}/{revisionId}/items"
                     urlBuilder_.Append("api/catalog/bill-of-material/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(productId, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append('/');
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(revisionId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/items");
 
                     PrepareRequest(client_, request_, urlBuilder_);
@@ -1630,18 +1752,21 @@ namespace Manufacturing.Catalog.Client
 
         /// <returns>No Content</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual System.Threading.Tasks.Task RemoveItemFromBillOfMaterialAsync(System.Guid productId, System.Guid materialId)
+        public virtual System.Threading.Tasks.Task RemoveItemFromBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, System.Guid materialId)
         {
-            return RemoveItemFromBillOfMaterialAsync(productId, materialId, System.Threading.CancellationToken.None);
+            return RemoveItemFromBillOfMaterialAsync(productId, revisionId, materialId, System.Threading.CancellationToken.None);
         }
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>No Content</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task RemoveItemFromBillOfMaterialAsync(System.Guid productId, System.Guid materialId, System.Threading.CancellationToken cancellationToken)
+        public virtual async System.Threading.Tasks.Task RemoveItemFromBillOfMaterialAsync(System.Guid productId, System.Guid revisionId, System.Guid materialId, System.Threading.CancellationToken cancellationToken)
         {
             if (productId == null)
                 throw new System.ArgumentNullException("productId");
+
+            if (revisionId == null)
+                throw new System.ArgumentNullException("revisionId");
 
             if (materialId == null)
                 throw new System.ArgumentNullException("materialId");
@@ -1655,10 +1780,12 @@ namespace Manufacturing.Catalog.Client
                     request_.Method = new System.Net.Http.HttpMethod("DELETE");
 
                     var urlBuilder_ = new System.Text.StringBuilder();
-                
-                    // Operation Path: "api/catalog/bill-of-material/{productId}/items/{materialId}"
+
+                    // Operation Path: "api/catalog/bill-of-material/{productId}/{revisionId}/items/{materialId}"
                     urlBuilder_.Append("api/catalog/bill-of-material/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(productId, System.Globalization.CultureInfo.InvariantCulture)));
+                    urlBuilder_.Append('/');
+                    urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(revisionId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/items/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(materialId, System.Globalization.CultureInfo.InvariantCulture)));
 
@@ -1807,7 +1934,7 @@ namespace Manufacturing.Catalog.Client
                     var field_ = System.Reflection.IntrospectionExtensions.GetTypeInfo(value.GetType()).GetDeclaredField(name);
                     if (field_ != null)
                     {
-                        var attribute = System.Reflection.CustomAttributeExtensions.GetCustomAttribute(field_, typeof(System.Runtime.Serialization.EnumMemberAttribute)) 
+                        var attribute = System.Reflection.CustomAttributeExtensions.GetCustomAttribute(field_, typeof(System.Runtime.Serialization.EnumMemberAttribute))
                             as System.Runtime.Serialization.EnumMemberAttribute;
                         if (attribute != null)
                         {
@@ -1819,7 +1946,7 @@ namespace Manufacturing.Catalog.Client
                     return converted == null ? string.Empty : converted;
                 }
             }
-            else if (value is bool) 
+            else if (value is bool)
             {
                 return System.Convert.ToString((bool)value, cultureInfo).ToLowerInvariant();
             }
@@ -1853,6 +1980,10 @@ namespace Manufacturing.Catalog.Client
 
         [Newtonsoft.Json.JsonProperty("productId", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Guid ProductId { get; set; }
+
+        [Newtonsoft.Json.JsonProperty("revision", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        [System.ComponentModel.DataAnnotations.RegularExpression(@"^-?(?:0|[1-9]\d*)$")]
+        public int Revision { get; set; }
 
         [Newtonsoft.Json.JsonProperty("materials", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public System.Collections.Generic.ICollection<Record> Materials { get; set; }

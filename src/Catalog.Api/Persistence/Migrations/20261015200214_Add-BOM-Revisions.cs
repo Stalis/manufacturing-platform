@@ -59,6 +59,16 @@ namespace Catalog.Api.Persistence.Migrations
                 columns: new[] { "ProductId", "Revision" },
                 unique: true);
 
+            // Older items each had an independent ID; group them into one initial revision per product.
+            migrationBuilder.Sql("""
+                INSERT INTO "BillOfMaterialRevisions" (id, "ProductId", "Revision")
+                SELECT gen_random_uuid(), "ProductId", 1 FROM "BillOfMaterialItems" GROUP BY "ProductId";
+                UPDATE "BillOfMaterialItems" items
+                SET "RevisionId" = revisions.id
+                FROM "BillOfMaterialRevisions" revisions
+                WHERE items."ProductId" = revisions."ProductId" AND revisions."Revision" = 1;
+                """);
+
             migrationBuilder.AddForeignKey(
                 name: "FK_BillOfMaterialItems_BillOfMaterialRevisions_RevisionId",
                 table: "BillOfMaterialItems",
@@ -71,6 +81,13 @@ namespace Catalog.Api.Persistence.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql("""
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM "BillOfMaterialRevisions" GROUP BY "ProductId" HAVING count(*) > 1) THEN
+                        RAISE EXCEPTION 'Cannot downgrade multiple BOM revisions to an unversioned BOM';
+                    END IF;
+                END $$;
+                """);
             migrationBuilder.DropForeignKey(
                 name: "FK_BillOfMaterialItems_BillOfMaterialRevisions_RevisionId",
                 table: "BillOfMaterialItems");
@@ -89,6 +106,8 @@ namespace Catalog.Api.Persistence.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_BillOfMaterialItems_RevisionId_MaterialId",
                 table: "BillOfMaterialItems");
+
+            migrationBuilder.Sql("""UPDATE "BillOfMaterialItems" SET "RevisionId" = gen_random_uuid();""");
 
             migrationBuilder.RenameColumn(
                 name: "RevisionId",

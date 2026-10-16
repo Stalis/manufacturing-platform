@@ -10,7 +10,7 @@ public static class ProductsEndpoints
         this IEndpointRouteBuilder app
     )
     {
-        var group = app.MapGroup("/api/products")
+        var group = app.MapGroup("/products")
             .WithTags("Products");
 
         group.MapGet("/", GetAllProducts)
@@ -67,7 +67,7 @@ public static class ProductsEndpoints
         await db.Products.AddAsync(product, cs);
         await db.SaveChangesAsync(cs);
 
-        return Results.Created($"/api/products/{product.Id}", product);
+        return Results.Created($"/products/{product.Id}", product);
     }
 
     public record UpdateProductRequest(Guid Id, string? SKU, string? Name);

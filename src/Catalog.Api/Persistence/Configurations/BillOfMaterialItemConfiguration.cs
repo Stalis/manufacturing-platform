@@ -11,7 +11,8 @@ class BillOfMaterialItemConfiguration : IEntityTypeConfiguration<BillOfMaterialI
         builder.ToTable("BillOfMaterialItems");
 
         builder.HasKey(x => new { x.RevisionId, x.MaterialId });
-        builder.HasIndex(x => new { x.RevisionId, x.MaterialId }).IsUnique();
+        // Product ownership is determined by the revision, not a second independent foreign key.
+        builder.Ignore(x => x.Product);
 
         builder.HasOne(x => x.Revision)
             .WithMany()

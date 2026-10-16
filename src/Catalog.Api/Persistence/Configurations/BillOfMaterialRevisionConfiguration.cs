@@ -2,6 +2,7 @@
 using Catalog.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Manufacturing.Core.Models;
 
 namespace Catalog.Api.Persistence.Configurations;
 
@@ -13,6 +14,7 @@ class BillOfMaterialRevisionConfiguration : IEntityTypeConfiguration<BillOfMater
 
         builder.HasKey(x => x.Id);
         builder.HasIndex(x => new { x.ProductId, x.Revision }).IsUnique();
+        builder.HasOne<Product>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
 
         builder.Property(x => x.Id)
             .HasColumnName("id")

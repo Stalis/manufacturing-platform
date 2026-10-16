@@ -15,6 +15,11 @@ public static class BillOfMaterialEndpoints
         var group = app.MapGroup("/bill-of-material")
             .WithTags("BillOfMaterial");
 
+        group.MapGet("/{productId:guid}/revisions/{revision:long}", GetBillOfMaterialByProductIdAndRevision)
+            .WithName("GetBillOfMaterialByProductIdAndRevision")
+            .Produces<BillOfMaterial>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status404NotFound);
+
         group.MapGet("/{productId:guid}/{revisionId:guid}", GetBillOfMaterialByProductIdAndRevisionId)
             .WithName("GetBillOfMaterialByProductIdAndRevisionId")
             .Produces<BillOfMaterial>(StatusCodes.Status200OK)
@@ -62,34 +67,47 @@ public static class BillOfMaterialEndpoints
 
     public static async Task<IResult> GetBillOfMaterialByProductIdAndRevisionId(Guid productId, Guid revisionId, CatalogDbContext db, CancellationToken cs)
     {
+        var revision = await db.BillOfMaterialRevisions
+            .SingleOrDefaultAsync(r => r.ProductId == productId && r.Id == revisionId, cs);
+        if (revision is null) return Results.NotFound();
+
         var billOfMaterialItems = await db.BillOfMaterialItems
             .Where(b => b.RevisionId == revisionId)
             .ToListAsync(cs);
 
-        if (billOfMaterialItems.Count == 0)
-        {
-            return Results.NotFound();
-        }
-
         var res = new BillOfMaterial
         {
             ProductId = productId,
+            Revision = revision.Revision,
             Materials = billOfMaterialItems.Select(b => new BillOfMaterial.Record(b.MaterialId, b.Quantity)).ToList()
         };
 
         return Results.Ok(res);
     }
 
+    public static async Task<IResult> GetBillOfMaterialByProductIdAndRevision(Guid productId, uint revision, CatalogDbContext db, CancellationToken cs)
+    {
+        var revisionId = await db.BillOfMaterialRevisions
+            .Where(r => r.ProductId == productId && r.Revision == revision)
+            .Select(r => (Guid?)r.Id).SingleOrDefaultAsync(cs);
+        return revisionId is null ? Results.NotFound()
+            : await GetBillOfMaterialByProductIdAndRevisionId(productId, revisionId.Value, db, cs);
+    }
+
     public static async Task<IResult> CreateBillOfMaterial(BillOfMaterial billOfMaterial, CatalogDbContext db, CancellationToken cs)
     {
+        if (billOfMaterial.Revision == 0 || billOfMaterial.Materials.Any(m => m.Quantity <= 0))
+            return Results.BadRequest("Revision and quantities must be positive.");
+        if (billOfMaterial.Materials.Select(m => m.MaterialId).Distinct().Count() != billOfMaterial.Materials.Count)
+            return Results.Conflict("A material can occur only once in a revision.");
+
         var billOfMaterialRevision = new BillOfMaterialRevision
         {
             ProductId = billOfMaterial.ProductId,
-            Revision = 1
+            Revision = billOfMaterial.Revision
         };
 
         await db.BillOfMaterialRevisions.AddAsync(billOfMaterialRevision, cs);
-        await db.SaveChangesAsync(cs);
 
         var billOfMaterialItems = billOfMaterial.Materials.Select(m => new BillOfMaterialItem
         {
@@ -103,15 +121,49 @@ public static class BillOfMaterialEndpoints
         await db.BillOfMaterialItems.AddRangeAsync(billOfMaterialItems, cs);
         await db.SaveChangesAsync(cs);
 
-        return Results.Created($"/api/bill-of-material/{billOfMaterial.ProductId}", billOfMaterial);
+        return Results.Created($"/api/catalog/bill-of-material/{billOfMaterial.ProductId}/{billOfMaterialRevision.Id}", billOfMaterial);
     }
 
     public static async Task<IResult> ReplaceBillOfMaterial(BillOfMaterial billOfMaterial, CatalogDbContext db, CancellationToken cs)
     {
+        if (billOfMaterial.Revision == 0 || billOfMaterial.Materials.Any(m => m.Quantity <= 0))
+            return Results.BadRequest("Revision and quantities must be positive.");
+        if (billOfMaterial.Materials.Select(m => m.MaterialId).Distinct().Count() != billOfMaterial.Materials.Count)
+            return Results.Conflict("A material can occur only once in a revision.");
+
         var revisionId = await db.BillOfMaterialRevisions
-            .Where(r => r.ProductId == billOfMaterial.ProductId)
-            .Select(r => r.Id)
-            .FirstOrDefaultAsync(cs);
+            .Where(r => r.ProductId == billOfMaterial.ProductId && r.Revision == billOfMaterial.Revision)
+            .Select(r => (Guid?)r.Id)
+            .SingleOrDefaultAsync(cs);
+        if (revisionId is null) return Results.NotFound();
+
+        var existingItems = await db.BillOfMaterialItems
+            .Where(b => b.RevisionId == revisionId)
+            .ToListAsync(cs);
+
+        var desired = billOfMaterial.Materials.ToDictionary(m => m.MaterialId);
+        foreach (var existing in existingItems)
+        {
+            if (desired.Remove(existing.MaterialId, out var item)) existing.Quantity = item.Quantity;
+            else db.BillOfMaterialItems.Remove(existing);
+        }
+        db.BillOfMaterialItems.AddRange(desired.Values.Select(m => new BillOfMaterialItem
+        {
+            RevisionId = revisionId.Value,
+            MaterialId = m.MaterialId,
+            Quantity = m.Quantity
+        }));
+        await db.SaveChangesAsync(cs);
+
+        return Results.NoContent();
+    }
+
+    public static async Task<IResult> DeleteBillOfMaterial(Guid productId, Guid revisionId, CatalogDbContext db, CancellationToken cs)
+    {
+        var revision = await db.BillOfMaterialRevisions
+            .SingleOrDefaultAsync(r => r.ProductId == productId && r.Id == revisionId, cs);
+        if (revision is null)
+            return Results.NotFound();
 
         var existingItems = await db.BillOfMaterialItems
             .Where(b => b.RevisionId == revisionId)
@@ -123,32 +175,7 @@ public static class BillOfMaterialEndpoints
         }
 
         db.BillOfMaterialItems.RemoveRange(existingItems);
-
-        var newItems = billOfMaterial.Materials.Select(m => new BillOfMaterialItem
-        {
-            RevisionId = revisionId,
-            MaterialId = m.MaterialId,
-            Quantity = m.Quantity
-        }).ToList();
-
-        await db.BillOfMaterialItems.AddRangeAsync(newItems, cs);
-        await db.SaveChangesAsync(cs);
-
-        return Results.NoContent();
-    }
-
-    public static async Task<IResult> DeleteBillOfMaterial(Guid productId, Guid revisionId, CatalogDbContext db, CancellationToken cs)
-    {
-        var existingItems = await db.BillOfMaterialItems
-        .Where(b => b.RevisionId == revisionId)
-        .ToListAsync(cs);
-
-        if (existingItems.Count == 0)
-        {
-            return Results.NotFound();
-        }
-
-        db.BillOfMaterialItems.RemoveRange(existingItems);
+        db.BillOfMaterialRevisions.Remove(revision);
         await db.SaveChangesAsync(cs);
 
         return Results.NoContent();
@@ -156,6 +183,9 @@ public static class BillOfMaterialEndpoints
 
     public static async Task<IResult> AddItemToBillOfMaterial(Guid productId, Guid revisionId, BillOfMaterial.Record item, CatalogDbContext db, CancellationToken cs)
     {
+        if (!await db.BillOfMaterialRevisions.AnyAsync(r => r.ProductId == productId && r.Id == revisionId, cs))
+            return Results.NotFound();
+        if (item.Quantity <= 0) return Results.BadRequest("Quantity must be positive.");
         var existingItem = await db.BillOfMaterialItems
             .FirstOrDefaultAsync(b => b.RevisionId == revisionId && b.MaterialId == item.MaterialId, cs);
 
@@ -179,6 +209,9 @@ public static class BillOfMaterialEndpoints
 
     public static async Task<IResult> UpdateItemInBillOfMaterial(Guid productId, Guid revisionId, BillOfMaterial.Record item, CatalogDbContext db, CancellationToken cs)
     {
+        if (!await db.BillOfMaterialRevisions.AnyAsync(r => r.ProductId == productId && r.Id == revisionId, cs))
+            return Results.NotFound();
+        if (item.Quantity <= 0) return Results.BadRequest("Quantity must be positive.");
         var existingItem = await db.BillOfMaterialItems
             .FirstOrDefaultAsync(b => b.RevisionId == revisionId && b.MaterialId == item.MaterialId, cs);
 
@@ -195,6 +228,8 @@ public static class BillOfMaterialEndpoints
 
     public static async Task<IResult> RemoveItemFromBillOfMaterial(Guid productId, Guid revisionId, Guid materialId, CatalogDbContext db, CancellationToken cs)
     {
+        if (!await db.BillOfMaterialRevisions.AnyAsync(r => r.ProductId == productId && r.Id == revisionId, cs))
+            return Results.NotFound();
         var existingItem = await db.BillOfMaterialItems
             .FirstOrDefaultAsync(b => b.RevisionId == revisionId && b.MaterialId == materialId, cs);
 

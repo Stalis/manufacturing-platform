@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 0. Change working directory to the root of the repository
 cd "$(dirname "$0")/.."
 
 # 1. Build Catalog and generate its OpenAPI
@@ -26,6 +27,11 @@ dotnet nswag openapi2csclient \
   /InjectHttpClient:true \
   /DisposeHttpClient:false \
   /UseBaseUrl:false
+
+# NSwag emits whitespace-only lines; normalize them as part of generation.
+client=src/Catalog.Api.Client/Generated/CatalogClient.cs
+sed 's/[[:space:]]*$//' "$client" > "$client.tmp"
+mv "$client.tmp" "$client"
 
 # 4. Verify generated client
 dotnet build src/Catalog.Api.Client

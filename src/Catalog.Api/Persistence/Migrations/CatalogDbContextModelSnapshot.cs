@@ -30,9 +30,6 @@ namespace Catalog.Api.Persistence.Migrations
                     b.Property<Guid>("MaterialId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid");
-
                     b.Property<int>("Quantity")
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
@@ -40,11 +37,6 @@ namespace Catalog.Api.Persistence.Migrations
                     b.HasKey("RevisionId", "MaterialId");
 
                     b.HasIndex("MaterialId");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("RevisionId", "MaterialId")
-                        .IsUnique();
 
                     b.ToTable("BillOfMaterialItems", (string)null);
                 });
@@ -129,12 +121,6 @@ namespace Catalog.Api.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Manufacturing.Core.Models.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Catalog.Core.Models.BillOfMaterialRevision", "Revision")
                         .WithMany()
                         .HasForeignKey("RevisionId")
@@ -143,9 +129,16 @@ namespace Catalog.Api.Persistence.Migrations
 
                     b.Navigation("Material");
 
-                    b.Navigation("Product");
-
                     b.Navigation("Revision");
+                });
+
+            modelBuilder.Entity("Catalog.Core.Models.BillOfMaterialRevision", b =>
+                {
+                    b.HasOne("Manufacturing.Core.Models.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }
