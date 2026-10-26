@@ -13,6 +13,10 @@
     <Project Path="src/Manufacturing.Nats.Contract/Manufacturing.Nats.Contract.csproj" />
     <Project Path="src/Orders.Api/Orders.Api.csproj" />
     <Project Path="src/Orders.Core/Orders.Core.csproj" />
+    <Project Path="src/Web.Client/Web.Client.esproj">
+      <Build />
+      <Deploy />
+    </Project>
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Catalog.Seed.Tests/Catalog.Seed.Tests.csproj" />
