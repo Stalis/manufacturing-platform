@@ -1,8 +1,5 @@
 namespace Catalog.Api.Endpoints;
 
-using Microsoft.AspNetCore.Routing;
-
-
 public static class CatalogEndpoints
 {
     public static IEndpointRouteBuilder MapCatalogEndpoints(
@@ -10,8 +7,8 @@ public static class CatalogEndpoints
     )
     {
         var group = app.MapGroup("/api/catalog")
-            .AddEndpointFilter<CatalogConflictFilter>()
-            .WithTags("Catalog");
+                       .AddEndpointFilter<CatalogConflictFilter>()
+                       .WithTags("Catalog");
 
         group.MapMaterialsEndpoints();
         group.MapProductsEndpoints();

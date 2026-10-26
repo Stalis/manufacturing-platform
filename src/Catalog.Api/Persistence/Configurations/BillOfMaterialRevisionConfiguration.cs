@@ -1,12 +1,11 @@
-
 using Catalog.Core.Models;
+using Manufacturing.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Manufacturing.Core.Models;
 
 namespace Catalog.Api.Persistence.Configurations;
 
-class BillOfMaterialRevisionConfiguration : IEntityTypeConfiguration<BillOfMaterialRevision>
+internal class BillOfMaterialRevisionConfiguration : IEntityTypeConfiguration<BillOfMaterialRevision>
 {
     public void Configure(EntityTypeBuilder<BillOfMaterialRevision> builder)
     {
@@ -17,7 +16,7 @@ class BillOfMaterialRevisionConfiguration : IEntityTypeConfiguration<BillOfMater
         builder.HasOne<Product>().WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Cascade);
 
         builder.Property(x => x.Id)
-            .HasColumnName("id")
-            .ValueGeneratedNever();
+               .HasColumnName("id")
+               .ValueGeneratedNever();
     }
 }

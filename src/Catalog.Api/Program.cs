@@ -9,19 +9,16 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
 
 builder.Services.AddDbContext<CatalogDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("Catalog")
-    )
+                                                    options.UseNpgsql(
+                                                        builder.Configuration.GetConnectionString("Catalog")
+                                                    )
 );
 
 
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
+if (app.Environment.IsDevelopment()) app.MapOpenApi();
 
 app.MapCatalogEndpoints();
 

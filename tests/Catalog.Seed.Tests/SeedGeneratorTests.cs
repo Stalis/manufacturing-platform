@@ -1,13 +1,15 @@
 using System.Globalization;
 using System.Text.Json;
-using Catalog.Seed;
 using Manufacturing.Core.Models;
 
 namespace Catalog.Seed.Tests;
 
 public class SeedGeneratorTests
 {
-    internal static SeedData Data() => SeedData.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "catalog_seed.json")));
+    internal static SeedData Data()
+    {
+        return SeedData.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "catalog_seed.json")));
+    }
 
     [Fact]
     public void CompleteCatalogHasStableUniqueSkusAndUnits()
@@ -17,8 +19,9 @@ public class SeedGeneratorTests
         Assert.Equal(557, catalog.Materials.Select(m => m.Sku).Distinct().Count());
         Assert.Equal(12, catalog.Products.Length);
         Assert.All(catalog.Materials, m => Assert.Equal(
-            m.Sku.StartsWith("WIRE-") ? MeasurementUnit.Meter :
-            m.Sku.StartsWith("PCB-") ? MeasurementUnit.SquareCentimeter : MeasurementUnit.Each, m.MeasurementUnit));
+                       m.Sku.StartsWith("WIRE-") ? MeasurementUnit.Meter :
+                       m.Sku.StartsWith("PCB-") ? MeasurementUnit.SquareCentimeter : MeasurementUnit.Each,
+                       m.MeasurementUnit));
         Assert.Contains(catalog.Materials, m => m.Sku == "THT-R-100K" && m.Name == "Resistor THT 100 kOm");
         Assert.Equal(catalog.Materials, SeedGenerator.Generate(Data()).Materials);
     }
@@ -47,25 +50,40 @@ public class SeedGeneratorTests
                 var (label, sku) = SeedGenerator.ResistorNominal(ohms);
                 Assert.DoesNotContain(",", label);
                 Assert.DoesNotContain("E+", label);
-                var decoded = sku.Contains('M') ? decimal.Parse(sku.Replace('M', '.'), CultureInfo.InvariantCulture) * 1_000_000
-                    : sku.Contains('K') ? decimal.Parse(sku.Replace('K', '.'), CultureInfo.InvariantCulture) * 1_000
-                    : decimal.Parse(sku, CultureInfo.InvariantCulture);
+                var decoded = sku.Contains('M')
+                    ? decimal.Parse(sku.Replace('M', '.'), CultureInfo.InvariantCulture) * 1_000_000
+                    : sku.Contains('K')
+                        ? decimal.Parse(sku.Replace('K', '.'), CultureInfo.InvariantCulture) * 1_000
+                        : decimal.Parse(sku, CultureInfo.InvariantCulture);
                 Assert.Equal(ohms, decoded);
             }
         }
-        finally { CultureInfo.CurrentCulture = previous; }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     [Fact]
     public void RejectsInvalidRecipesAndDuplicateSkus()
     {
         var catalog = SeedGenerator.Generate(Data());
-        Assert.Throws<InvalidDataException>(() => (catalog with { Materials = [.. catalog.Materials, catalog.Materials[0]] }).Validate());
-        Assert.Throws<InvalidDataException>(() => (catalog with { Products = [catalog.Products[0], catalog.Products[0]] }).Validate());
-        foreach (var items in new SeedItem[][]
+        Assert.Throws<InvalidDataException>(() => (catalog with
         {
-            [new("missing", 1)], [new("PCB-2L", 0)], [new("PCB-2L", 1), new("PCB-2L", 2)], []
-        })
-            Assert.Throws<InvalidDataException>(() => (catalog with { Products = [catalog.Products[0] with { Materials = items }] }).Validate());
+            Materials = [.. catalog.Materials, catalog.Materials[0]],
+        }).Validate());
+        Assert.Throws<InvalidDataException>(() => (catalog with
+        {
+            Products = [catalog.Products[0], catalog.Products[0]],
+        }).Validate());
+        foreach (var items in new SeedItem[][]
+                 {
+                     [new SeedItem("missing", 1)], [new SeedItem("PCB-2L", 0)],
+                     [new SeedItem("PCB-2L", 1), new SeedItem("PCB-2L", 2)], [],
+                 })
+            Assert.Throws<InvalidDataException>(() => (catalog with
+            {
+                Products = [catalog.Products[0] with { Materials = items }],
+            }).Validate());
     }
 }

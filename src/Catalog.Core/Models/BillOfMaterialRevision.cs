@@ -1,5 +1,3 @@
-using Manufacturing.Core.Models;
-
 namespace Catalog.Core.Models;
 
 public class BillOfMaterialRevision

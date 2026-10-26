@@ -1,6 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using Catalog.Api.Persistence;
 using Manufacturing.Core.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace Catalog.Api.Endpoints;
 
@@ -11,35 +11,35 @@ public static class MaterialsEndpoints
     )
     {
         var materialGroup = app.MapGroup("/materials")
-            .WithTags("Materials");
+                               .WithTags("Materials");
 
         materialGroup.MapGet("/{id:guid}", GetMaterialById)
-            .WithName("GetMaterialById")
-            .Produces<Material>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound);
+                     .WithName("GetMaterialById")
+                     .Produces<Material>()
+                     .Produces(StatusCodes.Status404NotFound);
 
         materialGroup.MapGet("/", GetAllMaterials)
-            .WithName("GetAllMaterials")
-            .Produces<List<Material>>(StatusCodes.Status200OK);
+                     .WithName("GetAllMaterials")
+                     .Produces<List<Material>>();
 
         materialGroup.MapPost("/", CreateMaterial)
-            .WithName("CreateMaterial")
-            .Accepts<CreateMaterialRequest>("application/json")
-            .Produces<Material>(StatusCodes.Status201Created)
-            .Produces(StatusCodes.Status409Conflict)
-            .Produces(StatusCodes.Status400BadRequest);
+                     .WithName("CreateMaterial")
+                     .Accepts<CreateMaterialRequest>("application/json")
+                     .Produces<Material>(StatusCodes.Status201Created)
+                     .Produces(StatusCodes.Status409Conflict)
+                     .Produces(StatusCodes.Status400BadRequest);
 
         materialGroup.MapPut("/", UpdateMaterial)
-            .WithName("UpdateMaterial")
-            .Accepts<UpdateMaterialRequest>("application/json")
-            .Produces(StatusCodes.Status409Conflict)
-            .Produces(StatusCodes.Status204NoContent)
-            .Produces(StatusCodes.Status404NotFound);
+                     .WithName("UpdateMaterial")
+                     .Accepts<UpdateMaterialRequest>("application/json")
+                     .Produces(StatusCodes.Status409Conflict)
+                     .Produces(StatusCodes.Status204NoContent)
+                     .Produces(StatusCodes.Status404NotFound);
 
         materialGroup.MapDelete("/{id:guid}", DeleteMaterial)
-            .WithName("DeleteMaterial")
-            .Produces(StatusCodes.Status204NoContent)
-            .Produces(StatusCodes.Status404NotFound);
+                     .WithName("DeleteMaterial")
+                     .Produces(StatusCodes.Status204NoContent)
+                     .Produces(StatusCodes.Status404NotFound);
 
         return app;
     }
@@ -58,37 +58,31 @@ public static class MaterialsEndpoints
         return Results.Ok(materials);
     }
 
-    public record CreateMaterialRequest(string Name, string SKU, MeasurementUnit MeasurementUnit);
-    public static async Task<IResult> CreateMaterial(CreateMaterialRequest request, CatalogDbContext db, CancellationToken cs)
+    public static async Task<IResult> CreateMaterial(CreateMaterialRequest request, CatalogDbContext db,
+                                                     CancellationToken cs)
     {
         var material = new Material
         {
             Name = request.Name,
             SKU = request.SKU,
-            MeasurementUnit = request.MeasurementUnit
+            MeasurementUnit = request.MeasurementUnit,
         };
 
         db.Materials.Add(material);
         await db.SaveChangesAsync(cs);
 
-        return Results.Created($"/materials/{material.Id}", material);
+        return Results.Created($"/api/catalog/materials/{material.Id}", material);
     }
 
-    public record UpdateMaterialRequest(Guid Id, string? Name, string? SKU, MeasurementUnit? MeasurementUnit);
-
-    public static async Task<IResult> UpdateMaterial(UpdateMaterialRequest request, CatalogDbContext db, CancellationToken cs)
+    public static async Task<IResult> UpdateMaterial(UpdateMaterialRequest request, CatalogDbContext db,
+                                                     CancellationToken cs)
     {
         if (request.Name is null && request.SKU is null && request.MeasurementUnit is null)
-        {
             return Results.BadRequest("At least one field must be provided for update.");
-        }
 
         var existingMaterial = await db.Materials.FindAsync([request.Id], cs);
 
-        if (existingMaterial is null)
-        {
-            return Results.NotFound();
-        }
+        if (existingMaterial is null) return Results.NotFound();
 
 
         existingMaterial.Name = request.Name ?? existingMaterial.Name;
@@ -104,14 +98,15 @@ public static class MaterialsEndpoints
     {
         var material = await db.Materials.FindAsync([Id], cs);
 
-        if (material is null)
-        {
-            return Results.NotFound();
-        }
+        if (material is null) return Results.NotFound();
 
         db.Materials.Remove(material);
         await db.SaveChangesAsync(cs);
 
         return Results.NoContent();
     }
+
+    public record CreateMaterialRequest(string Name, string SKU, MeasurementUnit MeasurementUnit);
+
+    public record UpdateMaterialRequest(Guid Id, string? Name, string? SKU, MeasurementUnit? MeasurementUnit);
 }

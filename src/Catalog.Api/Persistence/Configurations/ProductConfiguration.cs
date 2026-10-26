@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Catalog.Api.Persistence.Configurations;
 
-class ProductConfiguration : IEntityTypeConfiguration<Product>
+internal class ProductConfiguration : IEntityTypeConfiguration<Product>
 {
     public void Configure(EntityTypeBuilder<Product> builder)
     {
@@ -14,12 +14,12 @@ class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.HasIndex(x => x.SKU).IsUnique();
 
         builder.Property(x => x.Id)
-            .HasColumnName("id")
-            .ValueGeneratedNever();
+               .HasColumnName("id")
+               .ValueGeneratedNever();
 
         builder.Property(x => x.Name)
-            .HasColumnName("name")
-            .HasMaxLength(100)
-            .IsRequired();
+               .HasColumnName("name")
+               .HasMaxLength(100)
+               .IsRequired();
     }
 }

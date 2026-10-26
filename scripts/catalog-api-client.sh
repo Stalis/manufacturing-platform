@@ -26,7 +26,8 @@ dotnet nswag openapi2csclient \
   /OperationGenerationMode:SingleClientFromOperationId \
   /InjectHttpClient:true \
   /DisposeHttpClient:false \
-  /UseBaseUrl:false
+  /UseBaseUrl:false \
+  /JsonLibrary:SystemTextJson
 
 # NSwag emits whitespace-only lines; normalize them as part of generation.
 client=src/Catalog.Api.Client/Generated/CatalogClient.cs

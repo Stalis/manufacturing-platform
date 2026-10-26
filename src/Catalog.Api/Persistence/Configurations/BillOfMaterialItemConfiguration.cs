@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Catalog.Api.Persistence.Configurations;
 
-class BillOfMaterialItemConfiguration : IEntityTypeConfiguration<BillOfMaterialItem>
+internal class BillOfMaterialItemConfiguration : IEntityTypeConfiguration<BillOfMaterialItem>
 {
     public void Configure(EntityTypeBuilder<BillOfMaterialItem> builder)
     {
@@ -15,17 +15,17 @@ class BillOfMaterialItemConfiguration : IEntityTypeConfiguration<BillOfMaterialI
         builder.Ignore(x => x.Product);
 
         builder.HasOne(x => x.Revision)
-            .WithMany()
-            .HasForeignKey(x => x.RevisionId)
-            .OnDelete(DeleteBehavior.Cascade);
+               .WithMany()
+               .HasForeignKey(x => x.RevisionId)
+               .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(x => x.Material)
-            .WithMany()
-            .HasForeignKey(x => x.MaterialId)
-            .OnDelete(DeleteBehavior.Restrict);
+               .WithMany()
+               .HasForeignKey(x => x.MaterialId)
+               .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.Quantity)
-            .HasColumnName("quantity")
-            .IsRequired();
+               .HasColumnName("quantity")
+               .IsRequired();
     }
 }

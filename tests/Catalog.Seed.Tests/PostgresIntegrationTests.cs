@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using Catalog.Api.Endpoints;
 using Catalog.Api.Persistence;
 using Manufacturing.Catalog.Client;
+using Manufacturing.Core.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -10,6 +11,9 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using BillOfMaterial = Manufacturing.Catalog.Client.BillOfMaterial;
+using Material = Manufacturing.Core.Models.Material;
+using Record = Manufacturing.Catalog.Client.Record;
 
 namespace Catalog.Seed.Tests;
 
@@ -32,31 +36,37 @@ public class PostgresIntegrationTests
         await using var admin = new NpgsqlConnection(adminConnection);
         await admin.OpenAsync();
         await using (var create = new NpgsqlCommand($"CREATE DATABASE {database}", admin))
+        {
             await create.ExecuteNonQueryAsync();
+        }
+
         try
         {
-            var connection = new NpgsqlConnectionStringBuilder(adminConnection) { Database = database, Pooling = false }.ConnectionString;
+            var connection = new NpgsqlConnectionStringBuilder(adminConnection) { Database = database, Pooling = false }
+                .ConnectionString;
             var options = new DbContextOptionsBuilder<CatalogDbContext>().UseNpgsql(connection).Options;
             await using (var db = new CatalogDbContext(options))
             {
                 var migrator = db.GetService<IMigrator>();
                 await migrator.MigrateAsync("20261015142523_InitialCreate");
-                db.Materials.AddRange(Enumerable.Range(0, 2).Select(_ => new Manufacturing.Core.Models.Material
-                { SKU = "DUPLICATE", Name = "Duplicate", MeasurementUnit = Manufacturing.Core.Models.MeasurementUnit.Each }));
+                db.Materials.AddRange(Enumerable.Range(0, 2).Select(_ => new Material
+                {
+                    SKU = "DUPLICATE", Name = "Duplicate", MeasurementUnit = MeasurementUnit.Each,
+                }));
                 await db.SaveChangesAsync();
                 var duplicate = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync());
                 Assert.Contains("Material SKU: DUPLICATE", duplicate.MessageText);
                 Assert.Equal(2, await db.Materials.CountAsync());
                 await db.Materials.ExecuteDeleteAsync();
                 await db.Database.ExecuteSqlRawAsync("""
-                    INSERT INTO "Products" (id, "SKU", name) VALUES ('00000000-0000-0000-0000-000000000001', 'LEGACY-P', 'Legacy product');
-                    INSERT INTO "Materials" (id, "SKU", name, measurement_unit) VALUES ('00000000-0000-0000-0000-000000000002', 'LEGACY-M', 'Legacy material', 0);
-                    INSERT INTO "Materials" (id, "SKU", name, measurement_unit) VALUES ('00000000-0000-0000-0000-000000000004', 'LEGACY-M2', 'Legacy material 2', 0);
-                    INSERT INTO "BillOfMaterialItems" (id, "ProductId", "MaterialId", quantity)
-                    VALUES ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', 7);
-                    INSERT INTO "BillOfMaterialItems" (id, "ProductId", "MaterialId", quantity)
-                    VALUES ('00000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000004', 3);
-                    """);
+                                                     INSERT INTO "Products" (id, "SKU", name) VALUES ('00000000-0000-0000-0000-000000000001', 'LEGACY-P', 'Legacy product');
+                                                     INSERT INTO "Materials" (id, "SKU", name, measurement_unit) VALUES ('00000000-0000-0000-0000-000000000002', 'LEGACY-M', 'Legacy material', 0);
+                                                     INSERT INTO "Materials" (id, "SKU", name, measurement_unit) VALUES ('00000000-0000-0000-0000-000000000004', 'LEGACY-M2', 'Legacy material 2', 0);
+                                                     INSERT INTO "BillOfMaterialItems" (id, "ProductId", "MaterialId", quantity)
+                                                     VALUES ('00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', 7);
+                                                     INSERT INTO "BillOfMaterialItems" (id, "ProductId", "MaterialId", quantity)
+                                                     VALUES ('00000000-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000004', 3);
+                                                     """);
                 await migrator.MigrateAsync();
                 Assert.Equal(10, await db.BillOfMaterialItems.SumAsync(m => m.Quantity));
                 Assert.Equal(2, await db.BillOfMaterialItems.CountAsync());
@@ -88,11 +98,14 @@ public class PostgresIntegrationTests
 
             var product = (await client.GetAllProductsAsync()).Single(p => p.Sku == seed.Products[0].Sku);
             var material = (await client.GetAllMaterialsAsync()).First();
-            var conflict = await Assert.ThrowsAsync<ApiException>(() => client.CreateProductAsync(new()
-            { Sku = product.Sku, Name = product.Name }));
+            var conflict = await Assert.ThrowsAsync<ApiException>(() => client.CreateProductAsync(
+                                                                      new CreateProductRequest
+                                                                          { Sku = product.Sku, Name = product.Name }));
             Assert.Equal(409, conflict.StatusCode);
-            conflict = await Assert.ThrowsAsync<ApiException>(() => client.CreateMaterialAsync(new()
-            { Sku = material.Sku, Name = material.Name, MeasurementUnit = material.MeasurementUnit }));
+            conflict = await Assert.ThrowsAsync<ApiException>(() => client.CreateMaterialAsync(new CreateMaterialRequest
+            {
+                Sku = material.Sku, Name = material.Name, MeasurementUnit = material.MeasurementUnit,
+            }));
             Assert.Equal(409, conflict.StatusCode);
             var bom = await client.GetBillOfMaterialByProductIdAndRevisionAsync(product.Id, 1);
             conflict = await Assert.ThrowsAsync<ApiException>(() => client.CreateBillOfMaterialAsync(bom));
@@ -102,47 +115,92 @@ public class PostgresIntegrationTests
             var changed = seed.Products[0] with
             {
                 Name = "Updated product",
-                Materials = seed.Products[0].Materials.Select(m => m with { Quantity = m.Quantity + 1 }).ToArray()
+                Materials = seed.Products[0].Materials.Select(m => m with { Quantity = m.Quantity + 1 }).ToArray(),
             };
             var updated = seed with { Products = [changed, .. seed.Products.Skip(1)] };
             await seeder.RunAsync(updated);
             Assert.Equal("Updated product", (await client.GetProductByIdAsync(product.Id)).Name);
-            Assert.Equal(changed.Materials.Sum(m => m.Quantity), (await client.GetBillOfMaterialByProductIdAndRevisionAsync(product.Id, 1)).Materials.Sum(m => m.Quantity));
+            Assert.Equal(changed.Materials.Sum(m => m.Quantity),
+                         (await client.GetBillOfMaterialByProductIdAndRevisionAsync(product.Id, 1)).Materials
+                         .Sum(m => m.Quantity));
 
-            var nextRevision = updated with { Products = [changed with { Revision = 2, Materials = [changed.Materials[0]] }] };
+            var nextRevision = updated with
+            {
+                Products = [changed with { Revision = 2, Materials = [changed.Materials[0]] }],
+            };
             await seeder.RunAsync(nextRevision);
             Assert.Equal(2, (await client.GetBillOfMaterialByProductIdAndRevisionAsync(product.Id, 2)).Revision);
             Assert.Single((await client.GetBillOfMaterialByProductIdAndRevisionAsync(product.Id, 2)).Materials);
-            Assert.Equal(changed.Materials.Length, (await client.GetBillOfMaterialByProductIdAndRevisionAsync(product.Id, 1)).Materials.Count);
+            Assert.Equal(changed.Materials.Length,
+                         (await client.GetBillOfMaterialByProductIdAndRevisionAsync(product.Id, 1)).Materials.Count);
 
             // An empty revision remains discoverable and can be repaired on rerun.
-            await client.ReplaceBillOfMaterialAsync(new() { ProductId = product.Id, Revision = 2, Materials = [] });
+            await client.ReplaceBillOfMaterialAsync(new BillOfMaterial
+                                                        { ProductId = product.Id, Revision = 2, Materials = [] });
             await seeder.RunAsync(nextRevision);
             Assert.Single((await client.GetBillOfMaterialByProductIdAndRevisionAsync(product.Id, 2)).Materials);
 
-            var duplicateLines = await Assert.ThrowsAsync<ApiException>(() => client.CreateBillOfMaterialAsync(new()
-            { ProductId = product.Id, Revision = 3, Materials = [bom.Materials.First(), bom.Materials.First()] }));
+            var duplicateLines = await Assert.ThrowsAsync<ApiException>(() => client.CreateBillOfMaterialAsync(
+                                                                            new BillOfMaterial
+                                                                            {
+                                                                                ProductId = product.Id, Revision = 3,
+                                                                                Materials =
+                                                                                [
+                                                                                    bom.Materials.First(),
+                                                                                    bom.Materials.First(),
+                                                                                ],
+                                                                            }));
             Assert.Equal(409, duplicateLines.StatusCode);
-            var invalidMaterial = await Assert.ThrowsAsync<ApiException>(() => client.CreateBillOfMaterialAsync(new()
-            { ProductId = product.Id, Revision = 3, Materials = [new() { MaterialId = Guid.NewGuid(), Quantity = 1 }] }));
-            Assert.Equal(500, invalidMaterial.StatusCode);
-            var missingRevision = await Assert.ThrowsAsync<ApiException>(() => client.GetBillOfMaterialByProductIdAndRevisionAsync(product.Id, 3));
+            var invalidMaterial = await Assert.ThrowsAsync<ApiException>(() => client.CreateBillOfMaterialAsync(
+                                                                             new BillOfMaterial
+                                                                             {
+                                                                                 ProductId = product.Id, Revision = 3,
+                                                                                 Materials =
+                                                                                 [
+                                                                                     new Record
+                                                                                     {
+                                                                                         MaterialId = Guid.NewGuid(),
+                                                                                         Quantity = 1,
+                                                                                     },
+                                                                                 ],
+                                                                             }));
+            Assert.Equal(400, invalidMaterial.StatusCode);
+            var missingRevision =
+                await Assert.ThrowsAsync<ApiException>(() => client.GetBillOfMaterialByProductIdAndRevisionAsync(
+                                                           product.Id, 3));
             Assert.Equal(404, missingRevision.StatusCode);
             await using (var db = new CatalogDbContext(options))
             {
-                var revisionId = await db.BillOfMaterialRevisions.Where(r => r.ProductId == product.Id && r.Revision == 2)
-                    .Select(r => r.Id).SingleAsync();
+                var revisionId = await db.BillOfMaterialRevisions
+                                         .Where(r => r.ProductId == product.Id && r.Revision == 2)
+                                         .Select(r => r.Id).SingleAsync();
                 var wrongProduct = await Assert.ThrowsAsync<ApiException>(() =>
-                    client.GetBillOfMaterialByProductIdAndRevisionIdAsync(Guid.NewGuid(), revisionId));
+                                                                              client
+                                                                                  .GetBillOfMaterialByProductIdAndRevisionIdAsync(
+                                                                                      Guid.NewGuid(), revisionId));
                 Assert.Equal(404, wrongProduct.StatusCode);
             }
 
-            using var mismatch = await http.PutAsJsonAsync($"/api/catalog/api/products/{product.Id}", new
-            { id = Guid.NewGuid(), name = "Wrong ID" });
+            using var mismatch = await http.PutAsJsonAsync($"/api/catalog/products/{product.Id}", new
+                                                               { id = Guid.NewGuid(), name = "Wrong ID" });
             Assert.Equal(HttpStatusCode.BadRequest, mismatch.StatusCode);
-            var unrelatedError = await Assert.ThrowsAsync<ApiException>(() => client.CreateBillOfMaterialAsync(new()
-            { ProductId = Guid.NewGuid(), Revision = 1, Materials = [new() { MaterialId = material.Id, Quantity = 1 }] }));
-            Assert.Equal(500, unrelatedError.StatusCode);
+            var unrelatedError = await Assert.ThrowsAsync<ApiException>(() => client.CreateBillOfMaterialAsync(
+                                                                            new BillOfMaterial
+                                                                            {
+                                                                                ProductId = Guid.NewGuid(),
+                                                                                Revision = 1,
+                                                                                Materials =
+                                                                                [
+                                                                                    new Record
+                                                                                    {
+                                                                                        MaterialId = material.Id,
+                                                                                        Quantity = 1,
+                                                                                    },
+                                                                                ],
+                                                                            }));
+            Assert.Equal(400, unrelatedError.StatusCode);
+            var materialInUse = await Assert.ThrowsAsync<ApiException>(() => client.DeleteMaterialAsync(material.Id));
+            Assert.Equal(409, materialInUse.StatusCode);
             await app.StopAsync();
         }
         finally
