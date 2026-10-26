@@ -1,9 +1,15 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Producer.Contracts/Producer.Contracts.csproj" />
+    <Project Path="src/Producer.Worker/Producer.Worker.csproj" />
     <Project Path="src/Catalog.Api.Client/Catalog.Api.Client.csproj" />
     <Project Path="src/Catalog.Api/Catalog.Api.csproj" />
     <Project Path="src/Catalog.Core/Catalog.Core.csproj" />
+    <Project Path="src/Inventory.Contracts/Inventory.Contracts.csproj" />
+    <Project Path="src/Inventory.DAL/Inventory.DAL.csproj" />
+    <Project Path="src/Inventory.Worker/Inventory.Worker.csproj" />
     <Project Path="src/Manufacturing.Core/Manufacturing.Core.csproj" />
+    <Project Path="src/Manufacturing.Nats.Contract/Manufacturing.Nats.Contract.csproj" />
     <Project Path="src/Orders.Api/Orders.Api.csproj" />
     <Project Path="src/Orders.Core/Orders.Core.csproj" />
   </Folder>
@@ -13,5 +19,7 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Catalog.Seed/Catalog.Seed.csproj" />
+    <Project Path="tools/Manufacturing.Nats.Contracts.Generator/Manufacturing.Nats.Contracts.Generator.Tests/Manufacturing.Nats.Contracts.Generator.Tests.csproj" />
+    <Project Path="tools/Manufacturing.Nats.Contracts.Generator/Manufacturing.Nats.Contracts.Generator/Manufacturing.Nats.Contracts.Generator.csproj" />
   </Folder>
 </Solution>
