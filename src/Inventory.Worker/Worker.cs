@@ -13,7 +13,8 @@ namespace Inventory.Worker;
 public class Worker(
     ILogger<Worker> logger,
     INatsConnection nats,
-    IServiceScopeFactory scopeFactory) : BackgroundService
+    IServiceScopeFactory scopeFactory,
+    IConfiguration? configuration = null) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -84,6 +85,20 @@ public class Worker(
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
         var stock = await db.MaterialStocks.FirstOrDefaultAsync(s => s.Id == task.MaterialId, ct);
+        if (stock is null)
+        {
+            var defaultStock = configuration?.GetValue<uint?>("Inventory:DefaultInitialStock") ?? 10000u;
+            if (defaultStock > 0)
+            {
+                stock = new MaterialStock
+                {
+                    Id = task.MaterialId,
+                    Quantity = defaultStock,
+                };
+                db.MaterialStocks.Add(stock);
+            }
+        }
+
         if (stock is null || stock.Quantity < task.Quantity)
         {
             return new InventoryReserveReplyV1(

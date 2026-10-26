@@ -23,4 +23,15 @@ builder.Services.AddNats(
         });
 
 var host = builder.Build();
-host.Run();
+
+if (!EF.IsDesignTime)
+{
+    using var scope = host.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+    if (db.Database.IsRelational())
+    {
+        await db.Database.MigrateAsync();
+    }
+}
+
+await host.RunAsync();

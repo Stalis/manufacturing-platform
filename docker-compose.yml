@@ -24,5 +24,111 @@ services:
       - "4222:4222"
       - "8222:8222"
 
+  nats-init:
+    image: natsio/nats-box:latest
+    container_name: manufacturing-nats-init
+    depends_on:
+      - nats
+    environment:
+      NATS_URL: "nats://nats:4222"
+    volumes:
+      - ./deploy/nats/init-jetstream.sh:/init-jetstream.sh:ro
+    entrypoint: ["/bin/sh", "/init-jetstream.sh"]
+
+  catalog-api:
+    build:
+      context: .
+      dockerfile: src/Catalog.Api/Dockerfile
+    container_name: manufacturing-catalog-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Kestrel__Endpoints__Http__Url: "http://0.0.0.0:5142"
+      ConnectionStrings__Catalog: "Host=postgres;Port=5432;Database=Catalog;Username=catalog-api;Password=catalog-api"
+    ports:
+      - "5142:5142"
+
+  inventory-worker:
+    build:
+      context: .
+      dockerfile: src/Inventory.Worker/Dockerfile
+    container_name: manufacturing-inventory-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__Inventory: "Host=postgres;Port=5432;Database=Inventory;Username=inventory-api;Password=inventory-api"
+      NATS__Url: "nats://nats:4222"
+      Inventory__DefaultInitialStock: "10000"
+
+  producer-worker:
+    build:
+      context: .
+      dockerfile: src/Producer.Worker/Dockerfile
+    container_name: manufacturing-producer-worker
+    depends_on:
+      nats-init:
+        condition: service_completed_successfully
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      NATS__Url: "nats://nats:4222"
+
+  orders-api:
+    build:
+      context: .
+      dockerfile: src/Orders.Api/Dockerfile
+    container_name: manufacturing-orders-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats-init:
+        condition: service_completed_successfully
+      catalog-api:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Kestrel__Endpoints__Http__Url: "http://0.0.0.0:5139"
+      ConnectionStrings__Orders: "Host=postgres;Port=5432;Database=Orders;Username=orders-api;Password=orders-api"
+      CatalogApi__BaseUrl: "http://catalog-api:5142"
+      NATS__Url: "nats://nats:4222"
+    ports:
+      - "5139:5139"
+
+  gateway-api:
+    build:
+      context: .
+      dockerfile: src/Gateway.Api/Dockerfile
+    container_name: manufacturing-gateway-api
+    depends_on:
+      nats-init:
+        condition: service_completed_successfully
+      catalog-api:
+        condition: service_started
+      orders-api:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Kestrel__Endpoints__Http__Url: "http://0.0.0.0:5150"
+      CatalogApi__BaseUrl: "http://catalog-api:5142"
+      OrdersApi__BaseUrl: "http://orders-api:5139"
+      NATS__Url: "nats://nats:4222"
+    ports:
+      - "5150:5150"
+
+  web-client:
+    build:
+      context: .
+      dockerfile: src/Web.Client/Dockerfile
+    container_name: manufacturing-web-client
+    depends_on:
+      - gateway-api
+    ports:
+      - "5173:80"
+
 volumes:
   postgres_data:

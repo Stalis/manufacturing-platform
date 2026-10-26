@@ -39,9 +39,18 @@ builder.Services.AddHostedService<OrderProgressTracker>();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment()) app.MapOpenApi();
+if (!EF.IsDesignTime &&
+    System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name != "GetDocument.Insider")
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<OrdersDbContext>();
+    if (db.Database.IsRelational())
+    {
+        await db.Database.MigrateAsync();
+    }
+}
 
-app.UseHttpsRedirection();
+if (app.Environment.IsDevelopment()) app.MapOpenApi();
 
 app.MapOrdersEndpoints();
 

@@ -7,6 +7,11 @@ terraform {
   }
 }
 
+variable "nats_servers" {
+  type    = string
+  default = "nats.localhost:4222"
+}
+
 provider "jetstream" {
-  servers = "nats.localhost:4222"
+  servers = var.nats_servers
 }
