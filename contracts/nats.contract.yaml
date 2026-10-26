@@ -1,0 +1,62 @@
+base_subject: manufacturing
+services:
+  producer:
+    streams:
+      commands:
+        name: PRODUCTION_COMMANDS
+        retention: workqueue
+        
+        subjects:
+          start_v1: producer.tasks.start.v1
+      
+        consumers:
+          - durable_name: 'producer-worker'
+            filter_subjects:
+              - producer.tasks.start.>
+      
+      events:
+        name: PRODUCTION_EVENTS
+        retention: limits
+        
+        subjects:
+          started_v1: producer.events.started.v1
+          completed_v1: producer.events.completed.v1
+          failed_v1: producer.events.failed.v1
+          invalid_v1: producer.events.invalid.v1
+          stopped_v1: producer.events.stopped.v1
+
+        consumers:
+          - durable_name: 'orders-api-producer'
+            for_service: orders
+            filter_subjects:
+              - producer.events.>
+
+  inventory:
+    streams:
+      commands:
+        name: INVENTORY_COMMANDS
+        retention: workqueue
+        
+        subjects:
+          reserve_v1: inventory.tasks.reserve.v1
+          grab_v1: inventory.tasks.grab.v1
+        
+        consumers:
+          - durable_name: 'inventory-worker'
+            filter_subjects:
+              - inventory.tasks.reserve.>
+              - inventory.tasks.grab.>
+
+      events:
+        name: INVENTORY_EVENTS
+        retention: limits
+        
+        subjects:
+          delivered_v1: inventory.events.delivered.v1
+        
+        consumers:
+          - durable_name: 'producer-worker-inventory'
+            for_service: producer
+            filter_subjects:
+              - inventory.events.delivered.>
+  

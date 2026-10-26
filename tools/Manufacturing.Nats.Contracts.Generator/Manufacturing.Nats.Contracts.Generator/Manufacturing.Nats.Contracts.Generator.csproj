@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <IsPackable>false</IsPackable>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <IsRoslynComponent>true</IsRoslynComponent>
+
+        <RootNamespace>Manufacturing.Nats.Contracts.Generator</RootNamespace>
+        <PackageId>Manufacturing.Nats.Contracts.Generator</PackageId>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        
+        <GetTargetPathDependsOn>
+            $(GetTargetPathDependsOn);
+            GetGeneratorDependencyTargetPaths
+        </GetTargetPathDependsOn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="TargetNamespace" />
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all"/>
+        <PackageReference Include="YamlDotNet"
+                          PrivateAssets="all"
+                          GeneratePathProperty="true" />
+        <PackageReference Include="PolySharp" PrivateAssets="all" />
+    </ItemGroup>
+
+    <Target Name="GetGeneratorDependencyTargetPaths">
+        <ItemGroup>
+            <TargetPathWithTargetPlatformMoniker
+                    Include="$(PKGYamlDotNet)\lib\netstandard2.0\YamlDotNet.dll"
+                    IncludeRuntimeDependency="false" />
+        </ItemGroup>
+    </Target>
+</Project>

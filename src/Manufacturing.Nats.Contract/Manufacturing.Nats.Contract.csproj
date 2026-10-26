@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\tools\Manufacturing.Nats.Contracts.Generator\Manufacturing.Nats.Contracts.Generator\Manufacturing.Nats.Contracts.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Remove="..\..\contracts\nats.contract.yaml"/>
+        <AdditionalFiles Include="..\..\contracts\nats.contract.yaml" TargetNamespace="Manufacturing.Nats.Contract"/>
+    </ItemGroup>
+</Project>
