@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="HotChocolate.AspNetCore" />
+        <PackageReference Include="NATS.Net" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Catalog.Api.Client\Catalog.Api.Client.csproj" />
+        <ProjectReference Include="..\Manufacturing.Core\Manufacturing.Core.csproj" />
+        <ProjectReference Include="..\Manufacturing.Nats.Contract\Manufacturing.Nats.Contract.csproj" />
+        <ProjectReference Include="..\Orders.Core\Orders.Core.csproj" />
+        <ProjectReference Include="..\Producer.Contracts\Producer.Contracts.csproj" />
+    </ItemGroup>
+
+</Project>

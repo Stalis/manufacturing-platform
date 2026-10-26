@@ -30,6 +30,10 @@ services:
             for_service: orders
             filter_subjects:
               - producer.events.>
+          - durable_name: 'gateway-api-producer'
+            for_service: gateway
+            filter_subjects:
+              - producer.events.>
 
   inventory:
     streams:
