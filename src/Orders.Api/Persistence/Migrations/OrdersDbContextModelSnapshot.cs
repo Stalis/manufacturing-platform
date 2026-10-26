@@ -22,15 +22,100 @@ namespace Orders.Api.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Orders.Core.Order", b =>
+            modelBuilder.Entity("Orders.Core.Models.BomSnapshot", b =>
+                {
+                    b.Property<string>("Hash")
+                        .HasMaxLength(128)
+                        .HasColumnType("varchar")
+                        .HasColumnName("hash");
+
+                    b.Property<string>("Json")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("json");
+
+                    b.HasKey("Hash");
+
+                    b.ToTable("BomSnapshots", (string)null);
+                });
+
+            modelBuilder.Entity("Orders.Core.Models.Order", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
                     b.HasKey("Id");
 
                     b.ToTable("Orders", (string)null);
+                });
+
+            modelBuilder.Entity("Orders.Core.Models.Order", b =>
+                {
+                    b.OwnsMany("Orders.Core.Models.Order+OrderItem", "Items", b1 =>
+                        {
+                            b1.Property<Guid>("OrderId");
+
+                            b1.Property<int>("__synthesizedOrdinal")
+                                .ValueGeneratedOnAdd();
+
+                            b1.Property<Guid>("BOMRevision");
+
+                            b1.Property<Guid>("ProductId");
+
+                            b1.Property<int>("Quantity");
+
+                            b1.Property<long>("Revision");
+
+                            b1.HasKey("OrderId", "__synthesizedOrdinal");
+
+                            b1.ToTable("Orders");
+
+                            b1
+                                .ToJson("items")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("OrderId");
+
+                            b1.OwnsMany("Orders.Core.Models.Order+OrderProductionTask", "Tasks", b2 =>
+                                {
+                                    b2.Property<Guid>("OrderItemOrderId");
+
+                                    b2.Property<int>("OrderItem__synthesizedOrdinal");
+
+                                    b2.Property<int>("__synthesizedOrdinal")
+                                        .ValueGeneratedOnAdd();
+
+                                    b2.Property<string>("LastMessage");
+
+                                    b2.Property<int>("Status");
+
+                                    b2.Property<Guid>("TaskId");
+
+                                    b2.HasKey("OrderItemOrderId", "OrderItem__synthesizedOrdinal", "__synthesizedOrdinal");
+
+                                    b2.ToTable("Orders");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("OrderItemOrderId", "OrderItem__synthesizedOrdinal");
+                                });
+
+                            b1.Navigation("Tasks");
+                        });
+
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

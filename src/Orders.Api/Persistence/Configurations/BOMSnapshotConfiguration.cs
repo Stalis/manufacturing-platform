@@ -11,17 +11,17 @@ internal class BomSnapshotConfiguration : IEntityTypeConfiguration<BomSnapshot>
         builder.ToTable("BomSnapshots");
 
         builder.HasKey(x => x.Hash);
-        
+        builder.Ignore(x => x.BillOfMaterial);
+
         builder.Property(x => x.Json)
-            .HasColumnName("json")
-            .HasColumnType("jsonb")
-            .IsRequired();
-        
+               .HasColumnName("json")
+               .HasColumnType("jsonb")
+               .IsRequired();
+
         builder.Property(x => x.Hash)
-            .HasColumnName("hash")
-            .HasColumnType("varchar")
-            .HasMaxLength(128)
-            .IsRequired();
+               .HasColumnName("hash")
+               .HasColumnType("varchar")
+               .HasMaxLength(128)
+               .IsRequired();
     }
 }
-
