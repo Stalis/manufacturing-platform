@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>dotnet-Inventory.Worker-9f18a3d4-f503-4b6c-b028-b641ce44bb86</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.Hosting"/>
+        <PackageReference Include="NATS.Net"/>
+        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Inventory.Contracts\Inventory.Contracts.csproj" />
+      <ProjectReference Include="..\Inventory.DAL\Inventory.DAL.csproj" />
+      <ProjectReference Include="..\Manufacturing.Nats.Contract\Manufacturing.Nats.Contract.csproj" />
+    </ItemGroup>
+</Project>
