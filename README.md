@@ -1,20 +1,20 @@
 # Manufacturing Platform
 
-Распределённая событийно-ориентированная платформа управления производством на базе **.NET 10**, **NATS JetStream**, **PostgreSQL**, **HotChocolate GraphQL (BFF)** и **React 19**.
+A distributed, event-driven manufacturing management platform built with **.NET 10**, **NATS JetStream**, **PostgreSQL**, **HotChocolate GraphQL (BFF)**, and **React 19**.
 
 ---
 
-## Архитектура системы
+## System Architecture
 
-Платформа построена вокруг подхода **Contract-First** для обмена сообщениями в NATS JetStream и паттерна **Backend-for-Frontend (GraphQL API Gateway)** для клиентского приложения:
+The platform is built around a **Contract-First** messaging design for NATS JetStream and a **Backend-for-Frontend (GraphQL API Gateway)** pattern for the client application:
 
-- Единый контракт [contracts/nats.contract.yaml](contracts/nats.contract.yaml) используется одновременно:
-  1. **Roslyn Incremental Source Generator** (`Manufacturing.Nats.Contracts.Generator`) — на этапе компиляции генерирует строго типизированный C#-класс `NatsContract` со всеми стримами, субъектами и консьюмерами.
-  2. **Terraform** ([deploy/terraform/nats](deploy/terraform/nats)) — через встроенную функцию `yamldecode` автоматически разворачивает стримы и durable-консьюмеры в NATS JetStream.
+- A single source-of-truth contract in [contracts/nats.contract.yaml](contracts/nats.contract.yaml) drives both:
+  1. **Roslyn Incremental Source Generator** (`Manufacturing.Nats.Contracts.Generator`) — generates the strongly typed `NatsContract` C# class at compile time with all streams, subjects, and durable consumers.
+  2. **Terraform** ([deploy/terraform/nats](deploy/terraform/nats)) — parses the exact same YAML file via the built-in `yamldecode` function to provision streams and durable consumers in NATS JetStream.
 
 ```mermaid
 flowchart TB
-    subgraph Client["Клиентский уровень"]
+    subgraph Client["Client Layer"]
         UI["Web.Client (React 19 + Vite + Apollo)"]
     end
 
@@ -22,7 +22,7 @@ flowchart TB
         GW["Gateway.Api (.NET 10 + HotChocolate GraphQL)"]
     end
 
-    subgraph Services["Микросервисы и воркеры (.NET 10)"]
+    subgraph Services["Microservices & Workers (.NET 10)"]
         CAT["Catalog.Api (Minimal API)"]
         ORD["Orders.Api (Minimal API + Progress Tracker)"]
         INV["Inventory.Worker (BackgroundService)"]
@@ -73,41 +73,41 @@ flowchart TB
     INV --> DB_INV
 
     YAML -. "AdditionalFiles" .-> GEN
-    GEN -. "Генерация NatsContract" .-> ORD
-    GEN -. "Генерация NatsContract" .-> INV
-    GEN -. "Генерация NatsContract" .-> PROD
-    GEN -. "Генерация NatsContract" .-> GW
+    GEN -. "Generates NatsContract" .-> ORD
+    GEN -. "Generates NatsContract" .-> INV
+    GEN -. "Generates NatsContract" .-> PROD
+    GEN -. "Generates NatsContract" .-> GW
     YAML -. "yamldecode()" .-> TF
     TF -. "Provisioning" .-> Messaging
 ```
 
 ---
 
-## Жизненный цикл заказа и последовательность выполнения
+## Order Lifecycle & Execution Flow
 
-Каждый заказ проходит через детерминированную цепочку состояний. Для каждой единицы продукции в позиции заказа создаётся отдельная производственная задача (`ProducerTaskV1`), что позволяет отслеживать прогресс выполнения заказа с точностью до штуки в реальном времени.
+Every order transitions through a deterministic state machine. For each unit of a product in an order line item, a dedicated production task (`ProducerTaskV1`) is dispatched, enabling unit-level real-time progress tracking.
 
-### Диаграмма состояний заказа (`OrderStatus`)
+### Order State Machine (`OrderStatus`)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Created : Создание заказа
-    Created --> WaitingForReserve : Снятие BOM-снимков (SHA-256)
-    WaitingForReserve --> Reserved : Материалы зарезервированы в Inventory
-    WaitingForReserve --> Error : Нехватка материалов / ошибка резерва
-    Reserved --> InProgress : Producer начал выполнение первой задачи
-    Reserved --> Error : Ошибка задачи производства
-    InProgress --> InProgress : Завершение очередного таска (обновление %)
-    InProgress --> Done : Все задачи успешно завершены (100%)
-    InProgress --> Error : Сбой захвата материалов или задачи
+    [*] --> Created : Order submitted
+    Created --> WaitingForReserve : BOM snapshots captured (SHA-256)
+    WaitingForReserve --> Reserved : Materials reserved in Inventory
+    WaitingForReserve --> Error : Insufficient stock / reservation failure
+    Reserved --> InProgress : Producer starts first task
+    Reserved --> Error : Production task failure
+    InProgress --> InProgress : Unit task completed (progress % updated)
+    InProgress --> Done : All tasks completed (100%)
+    InProgress --> Error : Material grab or production failure
 ```
 
-### Диаграмма последовательности (End-to-End Flow)
+### End-to-End Sequence Diagram
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Оператор (Web.Client)
+    actor User as Operator (Web.Client)
     participant GW as Gateway.Api (GraphQL)
     participant ORD as Orders.Api
     participant CAT as Catalog.Api
@@ -118,113 +118,113 @@ sequenceDiagram
     User->>GW: mutation createOrder(items)
     GW->>ORD: POST /api/orders
     ORD->>CAT: GET /api/catalog/bom/{productId}
-    CAT-->>ORD: BillOfMaterial (ревизия и материалы)
-    Note over ORD: Сохранение детерминированного BomSnapshot (SHA-256)<br/>Статус заказа: Created -> WaitingForReserve
+    CAT-->>ORD: BillOfMaterial (revision & materials)
+    Note over ORD: Persist deterministic BomSnapshot (SHA-256)<br/>Order status: Created -> WaitingForReserve
 
-    loop Для каждого требуемого материала
+    loop For each required material
         ORD->>NATS: Request manufacturing.inventory.tasks.reserve.v1
-        NATS->>INV: Доставка команды резервирования
+        NATS->>INV: Deliver reservation command
         INV-->>ORD: Reply InventoryReserveReplyV1 (Success, ReservationId)
     end
 
-    Note over ORD: Статус заказа: Reserved
-    loop Для каждой единицы товара (Quantity)
+    Note over ORD: Order status: Reserved
+    loop For each product unit (Quantity)
         ORD->>NATS: Publish manufacturing.producer.tasks.start.v1 (TaskId)
     end
     ORD-->>GW: 201 Created (Order)
     GW-->>User: OrderGql (Status: RESERVED, 0%)
 
-    loop Выполнение каждой задачи ProducerTaskV1
+    loop Execution of each ProducerTaskV1
         NATS->>PROD: Consume producer.tasks.start.v1
         PROD->>NATS: Publish producer.events.started.v1
-        NATS-->>ORD: OrderProgressTracker -> Статус: InProgress
+        NATS-->>ORD: OrderProgressTracker -> Status: InProgress
         NATS-->>GW: NatsSubscriptionBridge -> WebSocket push (orderUpdated)
-        GW-->>User: Live-обновление статуса и ленты событий
+        GW-->>User: Live status & telemetry stream update
 
         PROD->>NATS: Publish inventory.tasks.grab.v1
-        NATS->>INV: Списание зарезервированного материала
+        NATS->>INV: Consume reserved material stock
         INV->>NATS: Publish inventory.events.delivered.v1
-        NATS-->>PROD: Подтверждение доставки материалов в цех
+        NATS-->>PROD: Confirm material delivery to shop floor
 
-        Note over PROD: Производство единицы продукции
+        Note over PROD: Manufacture product unit
         PROD->>NATS: Publish producer.events.completed.v1
-        NATS-->>ORD: OrderProgressTracker -> Пересчёт CompletedTasksCount / %
+        NATS-->>ORD: OrderProgressTracker -> Recalculate CompletedTasksCount / %
         NATS-->>GW: NatsSubscriptionBridge -> WebSocket push (orderUpdated)
-        GW-->>User: Прогресс-бар обновлён (вплоть до Status: DONE, 100%)
+        GW-->>User: Progress bar updated (until Status: DONE, 100%)
     end
 ```
 
 ---
 
-## Структура репозитория
+## Repository Structure
 
 ```text
 manufacturing-platform/
 ├── contracts/
-│   └── nats.contract.yaml                  # Единый контракт стримов, субъектов и консьюмеров NATS JetStream
+│   └── nats.contract.yaml                  # Single source-of-truth NATS JetStream contract
 ├── deploy/
-│   ├── nats/init-jetstream.sh              # Инициализация JetStream для Docker Compose
-│   ├── postgres/init.sql                   # Инициализация БД Catalog, Orders и Inventory
-│   └── terraform/nats/                     # Синхронизация контракта NATS с JetStream через yamldecode
+│   ├── nats/init-jetstream.sh              # JetStream bootstrap script for Docker Compose
+│   ├── postgres/init.sql                   # Initializes Catalog, Orders, and Inventory databases
+│   └── terraform/nats/                     # Syncs NATS contract with JetStream via yamldecode
 ├── src/
-│   ├── Catalog.Api/                        # REST API каталога (материалы, продукты, ревизии BOM)
-│   ├── Catalog.Api.Client/                 # Типизированный HTTP-клиент для Catalog.Api
-│   ├── Catalog.Core/                       # Доменные модели каталога
-│   ├── Orders.Api/                         # REST API заказов и фоновый трекер прогресса OrderProgressTracker
-│   ├── Orders.Core/                        # Доменные модели заказов и детерминированный BomSnapshot
-│   ├── Inventory.Contracts/                # Контракты сообщений склада
-│   ├── Inventory.DAL/                      # EF Core контекст и миграции склада
-│   ├── Inventory.Worker/                   # Воркер резервирования и отгрузки материалов со склада
-│   ├── Producer.Contracts/                 # Контракты производственных задач и событий
-│   ├── Producer.Worker/                    # Воркер выполнения производственных задач
-│   ├── Manufacturing.Core/                 # Общие модели (Product, Material, BillOfMaterial)
-│   ├── Manufacturing.Nats.Contract/        # Проект-носитель сгенерированного NatsContract
+│   ├── Catalog.Api/                        # Catalog REST API (materials, products, BOM revisions)
+│   ├── Catalog.Api.Client/                 # Strongly typed HTTP client for Catalog.Api
+│   ├── Catalog.Core/                       # Catalog domain models
+│   ├── Orders.Api/                         # Orders REST API & OrderProgressTracker background service
+│   ├── Orders.Core/                        # Order domain models & deterministic BomSnapshot
+│   ├── Inventory.Contracts/                # Inventory messaging contracts
+│   ├── Inventory.DAL/                      # Inventory EF Core DbContext & migrations
+│   ├── Inventory.Worker/                   # Background worker for stock reservations & material grabs
+│   ├── Producer.Contracts/                 # Production task & event contracts
+│   ├── Producer.Worker/                    # Background worker executing production tasks
+│   ├── Manufacturing.Core/                 # Shared domain primitives (Product, Material, BillOfMaterial)
+│   ├── Manufacturing.Nats.Contract/        # Host project for the source-generated NatsContract
 │   ├── Gateway.Api/                        # GraphQL API Gateway (HotChocolate 16 + NATS WebSocket Bridge)
-│   └── Web.Client/                         # Фронтенд (React 19, Vite, Tailwind CSS v4, Apollo Client)
+│   └── Web.Client/                         # Frontend (React 19, Vite, Tailwind CSS v4, Apollo Client)
 ├── tests/
-│   ├── Catalog.Seed.Tests/                 # Тесты генератора и сидера каталога
-│   └── Orders.Core.Tests/                  # Юнит-тесты BomSnapshot и расчёта прогресса/статусов заказа
+│   ├── Catalog.Seed.Tests/                 # Catalog seeder & generator tests
+│   └── Orders.Core.Tests/                  # Unit tests for BomSnapshot hashing & order progress lifecycle
 ├── tools/
-│   ├── Catalog.Seed/                       # CLI-утилита наполнения каталога тестовыми данными
-│   └── Manufacturing.Nats.Contracts.Generator/ # Инкрементальный генератор Roslyn для NATS-контракта + тесты
-├── docker-compose.yml                      # Полный стек для запуска одной командой
-└── ManufacturingPlatform.slnx              # Основной файл решения (.NET + .esproj)
+│   ├── Catalog.Seed/                       # CLI tool for seeding catalog data
+│   └── Manufacturing.Nats.Contracts.Generator/ # Roslyn incremental source generator + test suite
+├── docker-compose.yml                      # Full-stack Docker Compose setup
+└── ManufacturingPlatform.slnx              # Main solution file (.NET + .esproj)
 ```
 
 ---
 
-## Быстрый старт
+## Quick Start
 
-### Вариант 1: Полный стек в Docker Compose (рекомендуется)
+### Option 1: Full Stack with Docker Compose (Recommended)
 
-Запускает PostgreSQL, NATS JetStream, автоматическую инициализацию стримов/консьюмеров, накатку миграций EF Core, все микросервисы, воркеры, GraphQL Gateway и фронтенд:
+Starts PostgreSQL, NATS JetStream, automatic stream/consumer initialization, EF Core startup migrations, all microservices, background workers, the GraphQL Gateway, and the React frontend:
 
 ```bash
 docker compose up --build
 ```
 
-После запуска сервисы доступны по адресам:
-- **Web UI (Панель управления)**: [http://localhost:5173](http://localhost:5173)
+Once started, services are available at:
+- **Web UI (Control Center)**: [http://localhost:5173](http://localhost:5173)
 - **GraphQL Gateway & Nitro IDE**: [http://localhost:5150/graphql](http://localhost:5150/graphql)
 - **Catalog REST API**: `http://localhost:5142`
 - **Orders REST API**: `http://localhost:5139`
 - **NATS Monitoring**: `http://localhost:8222`
 
-### Вариант 2: Локальная разработка (из IDE или CLI)
+### Option 2: Local Development (IDE or CLI)
 
-1. Поднимите инфраструктуру (PostgreSQL, NATS и инициализацию стримов):
+1. Start the infrastructure services (PostgreSQL, NATS, and JetStream bootstrap):
    ```bash
    docker compose up -d postgres nats nats-init
    ```
-   *(Либо примените конфигурацию через Terraform в `deploy/terraform/nats`: `terraform init && terraform apply`).*
+   *(Alternatively, provision NATS via Terraform in `deploy/terraform/nats`: `terraform init && terraform apply`).*
 
-2. Соберите решение и запустите тесты:
+2. Build the solution and run unit tests:
    ```bash
    dotnet build ManufacturingPlatform.slnx
    dotnet test ManufacturingPlatform.slnx --filter "FullyQualifiedName!~PostgresIntegrationTests"
    ```
 
-3. Запустите фронтенд в режиме разработки (с проксированием `/graphql` и WebSocket на `http://localhost:5150`):
+3. Run the frontend dev server (proxies `/graphql` HTTP and WebSocket traffic to `http://localhost:5150`):
    ```bash
    cd src/Web.Client
    npm install
