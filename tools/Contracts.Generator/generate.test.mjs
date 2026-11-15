@@ -148,6 +148,9 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using Example;
+using Example.Api;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 
@@ -184,6 +187,27 @@ catch (HttpRequestException error) when (error.StatusCode == HttpStatusCode.NotF
 var incomplete = await http.PostAsync("api/items",
     new StringContent("""{"name":"x","kind":"Small","tags":[]}""", Encoding.UTF8, "application/json"));
 Check(incomplete.StatusCode == HttpStatusCode.BadRequest, "missing required property");
+foreach (var number in new[] { 0, 99 })
+{
+    using var numeric = await http.PostAsync("api/items", new StringContent(
+        $$"""{"name":"x","kind":{{number}},"note":null,"tags":[]}""", Encoding.UTF8, "application/json"));
+    Check(numeric.StatusCode == HttpStatusCode.BadRequest, "integer enum must be rejected");
+}
+Check(ExampleApiEndpoints.MapEnum<Kind>(Kind.Large) == Kind.Large, "enum mapping");
+try
+{
+    ExampleApiEndpoints.MapEnum<Kind>((Kind)99);
+    Check(false, "undefined enum must be rejected");
+}
+catch (InvalidOperationException) { }
+var encoded = JsonSerializer.Serialize(created, Context.Default.Item);
+Check(JsonSerializer.Deserialize(encoded, Context.Default.Item)?.Kind == Kind.Large, "source-generated enum round-trip");
+try
+{
+    JsonSerializer.Deserialize(encoded.Replace("\\"Large\\"", "99"), Context.Default.Item);
+    Check(false, "source-generated deserialization must reject integer enums");
+}
+catch (JsonException) { }
 await client.DeleteItemAsync(created.Id);
 Console.WriteLine("HTTP round-trip passed.");
 
@@ -217,6 +241,9 @@ sealed class Handler : IItemsHandler
 
     private static ProblemDetails Missing(Guid id) => new() { Detail = $"No item {id}." };
 }
+
+[JsonSerializable(typeof(Item))]
+internal partial class Context : JsonSerializerContext;
 `);
   dotnetRun(join(directory, "Smoke.csproj"));
 }));

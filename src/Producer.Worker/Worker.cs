@@ -1,15 +1,11 @@
 using Inventory.Contracts.Models;
 using Manufacturing.Nats.Contract;
-using NATS.Client.Core;
 using Producer.Contracts.Models;
 
 namespace Producer.Worker;
 
-public class Worker(ILogger<Worker> logger, INatsConnection nats) : BackgroundService
+public class Worker(ILogger<Worker> logger, ProducerNatsClient producer, InventoryNatsClient inventory) : BackgroundService
 {
-    private readonly ProducerNatsClient producer = new(nats);
-    private readonly InventoryNatsClient inventory = new(nats);
-
     private ValueTask SendEvent(ProducerEventV1 message, CancellationToken cancellationToken)
     {
         return message.Type switch

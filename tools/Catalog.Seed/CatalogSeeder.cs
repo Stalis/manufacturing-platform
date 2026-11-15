@@ -28,7 +28,7 @@ public sealed class CatalogSeeder(CatalogClient client, TextWriter output)
             if (products.TryGetValue(product.Sku, out var existing))
                 try
                 {
-                    bom = await client.GetBillOfMaterialAsync(existing.Id, (uint)product.Revision, ct);
+                    bom = await client.GetBillOfMaterialAsync(existing.Id, product.Revision, ct);
                 }
                 catch (HttpRequestException error) when (error.StatusCode == HttpStatusCode.NotFound)
                 {
@@ -93,7 +93,7 @@ public sealed class CatalogSeeder(CatalogClient client, TextWriter output)
                 if (dryRun || equal) continue;
                 var bom = new BillOfMaterial(
                     existing!.Id,
-                    (uint)desired.Revision,
+                    desired.Revision,
                     desired.Materials.Select(item => new BillOfMaterialItem(materials[item.Sku].Id, item.Quantity))
                            .ToArray());
                 if (currentBom is null) await client.CreateBillOfMaterialAsync(bom, ct);

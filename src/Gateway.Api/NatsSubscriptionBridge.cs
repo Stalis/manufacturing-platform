@@ -1,15 +1,13 @@
-using System.Net;
 using Gateway.Api.GraphQL;
 using HotChocolate.Subscriptions;
 using Manufacturing.Nats.Contract;
-using NATS.Client.Core;
 using Orders.Contracts;
 
 namespace Gateway.Api;
 
 public sealed class NatsSubscriptionBridge(
     ILogger<NatsSubscriptionBridge> logger,
-    INatsConnection nats,
+    ProducerNatsClient producer,
     ITopicEventSender eventSender,
     OrdersClient ordersClient) : BackgroundService
 {
@@ -17,8 +15,6 @@ public sealed class NatsSubscriptionBridge(
     {
         try
         {
-            var producer = new ProducerNatsClient(nats);
-
             await foreach (var message in producer.ReadGatewayApiProducerAsync(stoppingToken))
             {
                 if (message.Data is not { } producerEvent)
@@ -32,15 +28,8 @@ public sealed class NatsSubscriptionBridge(
                     // Allow Orders.Api a brief moment to commit the updated task status
                     await Task.Delay(50, stoppingToken);
 
-                    OrderGql? gqlOrder = null;
-                    try
-                    {
-                        gqlOrder = OrderGql.FromContract(
-                            await ordersClient.GetOrderByTaskAsync(producerEvent.TaskId, stoppingToken));
-                    }
-                    catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-                    {
-                    }
+                    var order = await ordersClient.GetOrderByTaskAsync(producerEvent.TaskId, stoppingToken).OrNotFound();
+                    var gqlOrder = order is null ? null : OrderGql.FromContract(order);
 
                     if (gqlOrder is not null)
                     {

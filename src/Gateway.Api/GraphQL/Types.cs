@@ -1,4 +1,3 @@
-using System.Net;
 using Catalog.Contracts;
 using Orders.Contracts;
 using Producer.Contracts.Models;
@@ -24,20 +23,12 @@ public sealed record ProductGql(
         new(p.Id, p.Sku, p.Name);
 
     public async Task<BillOfMaterialGql?> GetBillOfMaterialAsync(
-        int revision,
+        uint revision,
         [Service] CatalogClient catalogClient,
-        CancellationToken ct)
-    {
-        try
-        {
-            var bom = await catalogClient.GetBillOfMaterialAsync(Id, checked((uint)revision), ct);
-            return BillOfMaterialGql.FromContract(bom);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-    }
+        CancellationToken ct) =>
+        await catalogClient.GetBillOfMaterialAsync(Id, revision, ct).OrNotFound() is { } bom
+            ? BillOfMaterialGql.FromContract(bom)
+            : null;
 }
 
 public sealed record BillOfMaterialItemGql(
@@ -46,29 +37,21 @@ public sealed record BillOfMaterialItemGql(
 {
     public async Task<MaterialGql?> GetMaterialAsync(
         [Service] CatalogClient catalogClient,
-        CancellationToken ct)
-    {
-        try
-        {
-            var material = await catalogClient.GetMaterialAsync(MaterialId, ct);
-            return MaterialGql.FromContract(material);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-    }
+        CancellationToken ct) =>
+        await catalogClient.GetMaterialAsync(MaterialId, ct).OrNotFound() is { } material
+            ? MaterialGql.FromContract(material)
+            : null;
 }
 
 public sealed record BillOfMaterialGql(
     Guid ProductId,
-    int Revision,
+    uint Revision,
     IReadOnlyList<BillOfMaterialItemGql> Materials)
 {
     public static BillOfMaterialGql FromContract(BillOfMaterial bom) =>
         new(
             bom.ProductId,
-            checked((int)bom.Revision),
+            bom.Revision,
             bom.Materials.Select(m => new BillOfMaterialItemGql(m.MaterialId, m.Quantity)).ToList());
 }
 
@@ -79,7 +62,7 @@ public sealed record OrderProductionTaskGql(
 
 public sealed record OrderItemGql(
     Guid ProductId,
-    int Revision,
+    uint Revision,
     Guid ReservationId,
     int Quantity,
     int CompletedQuantity,
@@ -87,18 +70,10 @@ public sealed record OrderItemGql(
 {
     public async Task<ProductGql?> GetProductAsync(
         [Service] CatalogClient catalogClient,
-        CancellationToken ct)
-    {
-        try
-        {
-            var product = await catalogClient.GetProductAsync(ProductId, ct);
-            return ProductGql.FromContract(product);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-    }
+        CancellationToken ct) =>
+        await catalogClient.GetProductAsync(ProductId, ct).OrNotFound() is { } product
+            ? ProductGql.FromContract(product)
+            : null;
 }
 
 public sealed record OrderGql(
@@ -122,7 +97,7 @@ public sealed record OrderGql(
             order.ProgressPercentage,
             order.Items.Select(i => new OrderItemGql(
                 i.ProductId,
-                checked((int)i.Revision),
+                i.Revision,
                 i.ReservationId,
                 i.Quantity,
                 i.CompletedQuantity,

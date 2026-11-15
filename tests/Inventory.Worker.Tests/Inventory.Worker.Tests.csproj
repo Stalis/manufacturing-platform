@@ -10,6 +10,7 @@
         <PackageReference Include="xunit"/>
         <PackageReference Include="xunit.runner.visualstudio"/>
         <Using Include="Xunit"/>
+        <Compile Include="../Shared/PostgresFactAttribute.cs" Link="Shared/PostgresFactAttribute.cs"/>
         <ProjectReference Include="../../src/Inventory.Worker/Inventory.Worker.csproj"/>
     </ItemGroup>
 </Project>

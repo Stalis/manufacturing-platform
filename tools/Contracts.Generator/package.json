@@ -7,8 +7,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "generate": "node generate.mjs ../../contracts/producer-events.tsp models=../../src/Producer.Contracts/Models/ProducerEventV1.cs ../../contracts/catalog.tsp models=../../src/Catalog.Contracts/Generated/Models.g.cs client=../../src/Catalog.Contracts/Generated/CatalogClient.g.cs server=../../src/Catalog.Api/Generated/CatalogApi.g.cs openapi=../../src/Catalog.Api/openapi.json ../../contracts/orders.tsp models=../../src/Orders.Contracts/Generated/Models.g.cs client=../../src/Orders.Contracts/Generated/OrdersClient.g.cs server=../../src/Orders.Api/Generated/OrdersApi.g.cs openapi=../../src/Orders.Api/openapi.json",
-    "check": "npm run generate -- --check",
+    "generate": "node generate.mjs",
+    "check": "node generate.mjs --check",
     "test": "node --test"
   },
   "dependencies": {

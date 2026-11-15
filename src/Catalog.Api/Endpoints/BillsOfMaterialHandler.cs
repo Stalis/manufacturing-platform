@@ -3,7 +3,7 @@ using Catalog.Contracts;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using static Catalog.Api.Endpoints.CatalogEndpoints;
+using static Catalog.Api.CatalogApiEndpoints;
 using Entities = Catalog.Core.Models;
 
 namespace Catalog.Api.Endpoints;
@@ -13,10 +13,7 @@ public sealed class BillsOfMaterialHandler(CatalogDbContext db) : IBillsOfMateri
     public async Task<Results<Ok<BillOfMaterial>, NotFound<ProblemDetails>>> GetBillOfMaterialAsync(
         Guid productId, uint revision, CancellationToken cancellationToken)
     {
-        var revisionId = await db.BillOfMaterialRevisions
-                                 .Where(r => r.ProductId == productId && r.Revision == revision)
-                                 .Select(r => (Guid?)r.Id)
-                                 .SingleOrDefaultAsync(cancellationToken);
+        var revisionId = await FindRevisionIdAsync(productId, revision, cancellationToken);
         return revisionId is null
             ? TypedResults.NotFound(Problem($"Product {productId} has no revision {revision}."))
             : await GetBillOfMaterialByRevisionIdAsync(productId, revisionId.Value, cancellationToken);
@@ -69,11 +66,7 @@ public sealed class BillsOfMaterialHandler(CatalogDbContext db) : IBillsOfMateri
         if (Invalid(billOfMaterial) is { } invalid) return TypedResults.BadRequest(invalid);
         if (Duplicated(billOfMaterial) is { } duplicated) return TypedResults.Conflict(duplicated);
 
-        var revisionId = await db.BillOfMaterialRevisions
-                                 .Where(r => r.ProductId == billOfMaterial.ProductId &&
-                                             r.Revision == billOfMaterial.Revision)
-                                 .Select(r => (Guid?)r.Id)
-                                 .SingleOrDefaultAsync(cancellationToken);
+        var revisionId = await FindRevisionIdAsync(billOfMaterial.ProductId, billOfMaterial.Revision, cancellationToken);
         if (revisionId is null)
         {
             return TypedResults.NotFound(
@@ -176,6 +169,11 @@ public sealed class BillsOfMaterialHandler(CatalogDbContext db) : IBillsOfMateri
         billOfMaterial.Materials.Select(m => m.MaterialId).Distinct().Count() != billOfMaterial.Materials.Length
             ? Problem("A material can occur only once in a revision.")
             : null;
+
+    private Task<Guid?> FindRevisionIdAsync(Guid productId, uint revision, CancellationToken cancellationToken) =>
+        db.BillOfMaterialRevisions.Where(r => r.ProductId == productId && r.Revision == revision)
+                                  .Select(r => (Guid?)r.Id)
+                                  .SingleOrDefaultAsync(cancellationToken);
 
     private Task<bool> RevisionExistsAsync(Guid productId, Guid revisionId, CancellationToken cancellationToken) =>
         db.BillOfMaterialRevisions.AnyAsync(r => r.ProductId == productId && r.Id == revisionId, cancellationToken);

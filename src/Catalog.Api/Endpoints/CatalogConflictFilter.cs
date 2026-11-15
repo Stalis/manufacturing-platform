@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using static Catalog.Api.Endpoints.CatalogEndpoints;
+using static Catalog.Api.CatalogApiEndpoints;
 
 namespace Catalog.Api.Endpoints;
 

@@ -1,4 +1,3 @@
-using System.Net;
 using Catalog.Contracts;
 using HotChocolate.Subscriptions;
 using Orders.Contracts;
@@ -18,18 +17,10 @@ public sealed class Query
     public async Task<MaterialGql?> GetMaterialByIdAsync(
         Guid id,
         [Service] CatalogClient catalogClient,
-        CancellationToken ct)
-    {
-        try
-        {
-            var material = await catalogClient.GetMaterialAsync(id, ct);
-            return MaterialGql.FromContract(material);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-    }
+        CancellationToken ct) =>
+        await catalogClient.GetMaterialAsync(id, ct).OrNotFound() is { } material
+            ? MaterialGql.FromContract(material)
+            : null;
 
     public async Task<IReadOnlyList<ProductGql>> GetProductsAsync(
         [Service] CatalogClient catalogClient,
@@ -42,35 +33,19 @@ public sealed class Query
     public async Task<ProductGql?> GetProductByIdAsync(
         Guid id,
         [Service] CatalogClient catalogClient,
-        CancellationToken ct)
-    {
-        try
-        {
-            var product = await catalogClient.GetProductAsync(id, ct);
-            return ProductGql.FromContract(product);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-    }
+        CancellationToken ct) =>
+        await catalogClient.GetProductAsync(id, ct).OrNotFound() is { } product
+            ? ProductGql.FromContract(product)
+            : null;
 
     public async Task<BillOfMaterialGql?> GetBillOfMaterialAsync(
         Guid productId,
-        int revision,
+        uint revision,
         [Service] CatalogClient catalogClient,
-        CancellationToken ct)
-    {
-        try
-        {
-            var bom = await catalogClient.GetBillOfMaterialAsync(productId, checked((uint)revision), ct);
-            return BillOfMaterialGql.FromContract(bom);
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-    }
+        CancellationToken ct) =>
+        await catalogClient.GetBillOfMaterialAsync(productId, revision, ct).OrNotFound() is { } bom
+            ? BillOfMaterialGql.FromContract(bom)
+            : null;
 
     public async Task<IReadOnlyList<OrderGql>> GetOrdersAsync(
         [Service] OrdersClient ordersClient,
@@ -83,17 +58,10 @@ public sealed class Query
     public async Task<OrderGql?> GetOrderByIdAsync(
         Guid id,
         [Service] OrdersClient ordersClient,
-        CancellationToken ct)
-    {
-        try
-        {
-            return OrderGql.FromContract(await ordersClient.GetOrderAsync(id, ct));
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            return null;
-        }
-    }
+        CancellationToken ct) =>
+        await ordersClient.GetOrderAsync(id, ct).OrNotFound() is { } order
+            ? OrderGql.FromContract(order)
+            : null;
 }
 
 public sealed record CreateMaterialInput(string Name, string Sku, MeasurementUnit MeasurementUnit);
@@ -102,9 +70,9 @@ public sealed record CreateProductInput(string Sku, string Name);
 
 public sealed record BillOfMaterialItemInput(Guid MaterialId, int Quantity);
 
-public sealed record UpsertBillOfMaterialInput(Guid ProductId, int Revision, List<BillOfMaterialItemInput> Materials);
+public sealed record UpsertBillOfMaterialInput(Guid ProductId, uint Revision, List<BillOfMaterialItemInput> Materials);
 
-public sealed record OrderItemInput(Guid ProductId, int Revision, int Quantity);
+public sealed record OrderItemInput(Guid ProductId, uint Revision, int Quantity);
 
 public sealed record CreateOrderInput(List<OrderItemInput> Items);
 
@@ -138,7 +106,7 @@ public sealed class Mutation
     {
         var created = await catalogClient.CreateBillOfMaterialAsync(new BillOfMaterial(
             input.ProductId,
-            checked((uint)input.Revision),
+            input.Revision,
             input.Materials.Select(m => new BillOfMaterialItem(m.MaterialId, m.Quantity)).ToArray()), ct);
 
         return BillOfMaterialGql.FromContract(created);
@@ -152,7 +120,7 @@ public sealed class Mutation
     {
         var created = await ordersClient.CreateOrderAsync(
             new CreateOrderRequest(
-                input.Items.Select(i => new CreateOrderItem(i.ProductId, checked((uint)i.Revision), i.Quantity)).ToArray()),
+                input.Items.Select(i => new CreateOrderItem(i.ProductId, i.Revision, i.Quantity)).ToArray()),
             ct);
 
         var gqlOrder = OrderGql.FromContract(created);

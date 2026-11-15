@@ -1,11 +1,13 @@
 using Inventory.DAL;
 using Inventory.Worker;
+using Manufacturing.Nats.Contract;
 using Microsoft.EntityFrameworkCore;
 using NATS.Client.Core;
 using NATS.Client.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddSingleton<InventoryNatsClient>();
 builder.Services.AddDbContext<InventoryDbContext>(options => 
         options.UseNpgsql(builder.Configuration.GetConnectionString("Inventory")));
 builder.Services.AddNats(

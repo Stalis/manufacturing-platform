@@ -9,7 +9,13 @@ namespace Catalog.Contracts
         [property: global::System.Text.Json.Serialization.JsonPropertyName("name")] string Name,
         [property: global::System.Text.Json.Serialization.JsonPropertyName("measurementUnit")] global::Catalog.Contracts.MeasurementUnit MeasurementUnit);
 
-    [global::System.Text.Json.Serialization.JsonConverter(typeof(global::System.Text.Json.Serialization.JsonStringEnumConverter<global::Catalog.Contracts.MeasurementUnit>))]
+    /// <summary>
+    /// Serializes contract enums by member name and rejects integer JSON values.
+    /// </summary>
+    public sealed class StrictStringEnumConverter<TEnum>() : global::System.Text.Json.Serialization.JsonStringEnumConverter<TEnum>(namingPolicy: null, allowIntegerValues: false)
+        where TEnum : struct, global::System.Enum;
+
+    [global::System.Text.Json.Serialization.JsonConverter(typeof(global::Catalog.Contracts.StrictStringEnumConverter<global::Catalog.Contracts.MeasurementUnit>))]
     public enum MeasurementUnit
     {
         Each,

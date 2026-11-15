@@ -2,6 +2,7 @@ namespace Inventory.Contracts.Models;
 
 /// <summary>
 /// Returns the unconsumed quantities of a reservation to stock. Repeated requests are no-ops.
+/// Releasing an unknown reservation replies NotFound and makes later reserves into it fail.
 /// </summary>
 public record InventoryReleaseTaskV1(Guid ReservationId)
 {

@@ -23,18 +23,18 @@ internal static class TypedClients
         var services = new HashSet<string>(StringComparer.Ordinal);
         foreach (var service in config.Services)
         {
-            Identifier(service.Key.ToPascalCase());
+            ValidateIdentifier(service.Key.ToPascalCase());
             if (!services.Add(service.Key.ToPascalCase()))
                 throw new InvalidOperationException($"Duplicate generated service '{service.Key}'.");
             foreach (var stream in Streams(service.Value))
             {
-                if (string.IsNullOrWhiteSpace(stream.Name) || !stream.Name.All(c => char.IsLetterOrDigit(c) || c is '_' or '-'))
+                if (string.IsNullOrWhiteSpace(stream.Name) || !IsNameToken(stream.Name))
                     throw new InvalidOperationException("Every stream requires a valid name.");
             }
             var methods = new HashSet<string>(StringComparer.Ordinal);
             foreach (var subject in Subjects(service.Value))
             {
-                Identifier(subject.Key.ToPascalCase());
+                ValidateIdentifier(subject.Key.ToPascalCase());
                 if (!methods.Add(subject.Key.ToPascalCase()))
                     throw new InvalidOperationException($"Duplicate method key '{subject.Key}' in service '{service.Key}'.");
                 var binding = subject.Binding;
@@ -44,14 +44,13 @@ internal static class TypedClients
                     throw new InvalidOperationException($"Invalid literal subject '{binding.Subject}'.");
                 if (!subjects.Add(binding.Subject))
                     throw new InvalidOperationException($"Duplicate subject/model binding for '{binding.Subject}'.");
-                Model(binding.Model);
+                ValidateModel(binding.Model);
                 if (binding.ReplyModel is not null)
                 {
                     if (!subject.Core)
                         throw new InvalidOperationException($"Request/reply requires core transport for '{binding.Subject}'.");
-                    Model(binding.ReplyModel);
-                    if (string.IsNullOrWhiteSpace(binding.QueueGroup) ||
-                        !binding.QueueGroup!.All(c => char.IsLetterOrDigit(c) || c is '_' or '-'))
+                    ValidateModel(binding.ReplyModel);
+                    if (string.IsNullOrWhiteSpace(binding.QueueGroup) || !IsNameToken(binding.QueueGroup!))
                         throw new InvalidOperationException($"Core responder '{binding.Subject}' requires a valid queue_group.");
                 }
             }
@@ -59,12 +58,12 @@ internal static class TypedClients
             foreach (var stream in Streams(service.Value))
             foreach (var consumer in stream.Consumers)
             {
-                Identifier(consumer.DurableName.DurableNameToClassName());
-                if (!consumer.DurableName.All(c => char.IsLetterOrDigit(c) || c is '_' or '-') ||
+                ValidateIdentifier(consumer.DurableName.DurableNameToClassName());
+                if (!IsNameToken(consumer.DurableName) ||
                     !consumers.Add(consumer.DurableName.DurableNameToClassName()))
                     throw new InvalidOperationException($"Invalid or duplicate consumer '{consumer.DurableName}'.");
                 if (consumer.ForService is not null)
-                    Identifier(consumer.ForService.ToPascalCase());
+                    ValidateIdentifier(consumer.ForService.ToPascalCase());
                 if (consumer.FilterSubjects.Count == 0 || consumer.FilterSubjects.Any(f => !ValidFilter(f)))
                     throw new InvalidOperationException($"Invalid filters for consumer '{consumer.DurableName}'.");
                 var matches = Matches(stream, consumer).ToArray();
@@ -86,13 +85,15 @@ internal static class TypedClients
         return tokens.Select((t, i) => t == "*" || (t == ">" && i == tokens.Length - 1) || SubjectToken(t)).All(v => v);
     }
 
-    private static void Identifier(string value)
+    private static bool IsNameToken(string value) => value.All(c => char.IsLetterOrDigit(c) || c is '_' or '-');
+
+    private static void ValidateIdentifier(string value)
     {
         if (!SyntaxFacts.IsValidIdentifier(value))
             throw new InvalidOperationException($"Invalid generated identifier '{value}'.");
     }
 
-    private static void Model(string model)
+    private static void ValidateModel(string model)
     {
         var type = SyntaxFactory.ParseTypeName(model ?? "");
         if (string.IsNullOrWhiteSpace(model) || type.ContainsDiagnostics ||
@@ -157,7 +158,13 @@ internal static class TypedClients
                 code.AppendLine("    }");
                 if (binding.ReplyModel is not null)
                 {
-                    code.AppendLine($"    public ValueTask<NatsMsg<global::{binding.ReplyModel}>> Request{name}Async({model} message, CancellationToken cancellationToken = default) => connection.RequestAsync<{model}, global::{binding.ReplyModel}>(\"{fixedSubject}\", message, cancellationToken: cancellationToken);");
+                    code.AppendLine($"    public async ValueTask<NatsMsg<global::{binding.ReplyModel}>> Request{name}Async({model} message, CancellationToken cancellationToken = default)");
+                    code.AppendLine("    {");
+                    code.AppendLine($"        var reply = await connection.RequestAsync<{model}, global::{binding.ReplyModel}>(\"{fixedSubject}\", message, cancellationToken: cancellationToken);");
+                    code.AppendLine("        if (reply.Headers is { } headers && headers.TryGetValue(\"Nats-Service-Error\", out var error))");
+                    code.AppendLine($"            throw new NatsException($\"{fixedSubject} failed: {{error}}\");");
+                    code.AppendLine("        return reply;");
+                    code.AppendLine("    }");
                     Responder(code, binding.QueueGroup!, name, fixedSubject, model, binding.ReplyModel);
                 }
             }
@@ -187,16 +194,26 @@ internal static class TypedClients
         code.AppendLine("            try");
         code.AppendLine("            {");
         code.AppendLine("                message.EnsureSuccess();");
-        code.AppendLine("                if (message.Data is { } payload)");
-        code.AppendLine("                {");
-        code.AppendLine("                    var reply = await handler(payload, cancellationToken);");
-        code.AppendLine("                    if (!string.IsNullOrEmpty(message.ReplyTo))");
-        code.AppendLine($"                        await message.ReplyAsync<global::{replyModel}>(reply, cancellationToken: cancellationToken);");
-        code.AppendLine("                }");
+        code.AppendLine("                var payload = message.Data ?? throw new InvalidOperationException(\"Request payload is empty.\");");
+        code.AppendLine("                var reply = await handler(payload, cancellationToken);");
+        code.AppendLine("                if (!string.IsNullOrEmpty(message.ReplyTo))");
+        code.AppendLine($"                    await message.ReplyAsync<global::{replyModel}>(reply, cancellationToken: cancellationToken);");
         code.AppendLine("            }");
         code.AppendLine("            catch (Exception ex) when (ex is not OperationCanceledException)");
         code.AppendLine("            {");
         code.AppendLine("                onError(ex, message.Subject);");
+        code.AppendLine("                if (!string.IsNullOrEmpty(message.ReplyTo))");
+        code.AppendLine("                {");
+        code.AppendLine("                    try");
+        code.AppendLine("                    {");
+        // Header values cannot contain line breaks.
+        code.AppendLine("                        await message.ReplyAsync(headers: new NatsHeaders { [\"Nats-Service-Error\"] = ex.Message.ReplaceLineEndings(\" \"), [\"Nats-Service-Error-Code\"] = \"500\" }, cancellationToken: cancellationToken);");
+        code.AppendLine("                    }");
+        code.AppendLine("                    catch (Exception replyEx) when (replyEx is not OperationCanceledException)");
+        code.AppendLine("                    {");
+        code.AppendLine("                        onError(replyEx, message.Subject);");
+        code.AppendLine("                    }");
+        code.AppendLine("                }");
         code.AppendLine("            }");
         code.AppendLine("        }");
         code.AppendLine("    }");

@@ -10,5 +10,6 @@
         <Using Include="Xunit"/>
         <ProjectReference Include="../../tools/Catalog.Seed/Catalog.Seed.csproj"/>
         <ProjectReference Include="../../src/Catalog.Api/Catalog.Api.csproj"/>
+        <Compile Include="../Shared/PostgresFactAttribute.cs" Link="Shared/PostgresFactAttribute.cs"/>
     </ItemGroup>
 </Project>

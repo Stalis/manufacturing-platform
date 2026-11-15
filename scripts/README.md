@@ -138,9 +138,13 @@ JetStream ACK reply subjects must never be used for application responses.
 
 `inventory.tasks.release.v1` (Core request/reply, same queue group) returns the
 unconsumed quantities of a reservation to stock and marks it `Canceled`; repeats
-are no-ops. Orders.Api calls it for every reservation of an order whose later
-reservation failed. Reserve and release lock the stock row (`FOR UPDATE`), so
-running them concurrently cannot lose an update. Deploy Inventory before Orders.
+are no-ops. A release that precedes its reserve creates a canceled placeholder
+and replies `NotFound`; late reserves cannot revive it. Reserve, grab and release
+lock the reservation before stock rows; concurrent releases cannot return stock twice.
+Orders cleans up before looking up material labels and finishes task persistence
+and publication independently of caller cancellation. On publication failure it
+releases reservations with no attempted task; possibly delivered tasks retain
+their stock and require reconciliation. Deploy Inventory before Orders.
 
 Build and regression checks:
 
@@ -156,12 +160,12 @@ edit generated files by hand:
 
 | Contract | Generated |
 |---|---|
-| `producer-events.tsp` | `src/Producer.Contracts/Models/ProducerEventV1.cs` |
+| `producer-events.tsp` | `src/Producer.Contracts/Generated/Models.g.cs` |
 | `catalog.tsp` | `src/Catalog.Contracts/Generated/*.g.cs` (DTOs, `CatalogClient`), `src/Catalog.Api/Generated/CatalogApi.g.cs` (handlers, `MapCatalogApi`) |
 | `orders.tsp` | `src/Orders.Contracts/Generated/*.g.cs` (DTOs, `OrdersClient`), `src/Orders.Api/Generated/OrdersApi.g.cs` (handlers, `MapOrdersApi`) |
 
-Other NATS message DTOs and `contracts/nats.contract.yaml` are unchanged;
-Terraform consumes only the topology YAML.
+Other NATS message DTOs are hand-written; `contracts/nats.contract.yaml` binds
+subjects to them and Terraform consumes only its topology.
 
 Node.js 22 or newer is needed for generation, not for normal .NET builds or runtime:
 
@@ -177,6 +181,7 @@ in-process. Compiler diagnostics fail the command. Outputs replace their
 destinations only after every input compiles; `check` detects stale C# without
 changing it. CI should run `ci`, `check`, the wrapper tests, and the normal .NET
 build. Generated C# is committed so consumers do not need Node.js to build.
+Default inputs and output paths live in `tools/Contracts.Generator/targets.json`.
 `generate` also writes `src/Catalog.Api/openapi.json` and `src/Orders.Api/openapi.json`
 with `@typespec/openapi3`; they are git-ignored and served at `/openapi/v1.json`
 in Development (404 with a hint when not generated).
@@ -195,11 +200,11 @@ and nested closed generic field types, annotated with `@csharpRecord(true)`
 (sealed) or `@csharpRecord(false)`; arrays (`T[]`); `T | null` (C# `T?`, the
 property stays required); primitive string/boolean/int32/uint32/int64/uint64/
 float64/decimal fields; and UUID string scalars mapped to `System.Guid`
-(`Manufacturing.Http.Guid` in HTTP contracts). The TypeSpec property name is the
+(`Manufacturing.CSharp.Guid`, shared by HTTP and message contracts). The TypeSpec property name is the
 JSON name: a camelCase name becomes a PascalCase C# property with
 `[JsonPropertyName]`. Enums are either all explicit int32 values (numeric on the
-wire, as in NATS messages) or all value-less (string on the wire via
-`JsonStringEnumConverter`). Type parameters become C# type parameters; template
+wire, as in NATS messages) or all value-less (string on the wire; integer values
+are rejected by `StrictStringEnumConverter<TEnum>`). Type parameters become C# type parameters; template
 instances become references to the corresponding generic record. `@doc` on
 declarations and operations becomes XML documentation.
 
@@ -217,11 +222,12 @@ System.Text.Json source-generation context.
 An HTTP contract imports `tools/Contracts.Generator/http.tsp` (it re-exports
 `@typespec/http`) and declares one `@service` namespace whose operations live in
 interfaces. Operation names must be unique per service. For each interface
-`X` the server output declares `IXHandler`, one method per operation returning
+`X` the server output declares `IXHandler` in `{Service}.Api`, one method per operation returning
 ASP.NET Core typed results (`Results<Ok<T>, NotFound<ProblemDetails>, …>`), and
-`Map{Service}Api()` binds every route to it. `Add{Service}Api()` registers problem
-details and the strict JSON options below; the API registers handler
-implementations in DI. The client output is one `{Service}Client` (an
+`Map{Service}Api()` binds every route to it and serves OpenAPI only in Development.
+`Add{Service}Api()` registers problem details and the strict JSON options below;
+the API registers handler implementations in DI. DTOs and the client remain in
+`{Service}.Contracts`. The client output is one `{Service}Client` (an
 `HttpClient` typed client) with the same operations; non-success responses
 throw `HttpRequestException` whose `StatusCode` is set and whose message holds
 the problem body.
@@ -275,8 +281,8 @@ a running API to compare the desired dataset with existing rows.
   material's unit. For example, `PCB-2L` quantity `80` means **80 cm²**, not 80 boards;
   a wire quantity `2` means **2 meters**. These are manufacturing requirements,
   not inventory balances.
-- Each product specifies one positive `revision` (default `1`, up to the generated
-  client's `int` maximum). The tool creates or reconciles only that revision.
+- Each product specifies one positive `revision` (default `1`, up to the contract's
+  `uint32` maximum). The tool creates or reconciles only that revision.
   Other revisions are left alone. Increment the value to seed a new revision;
   changes with the same value update the existing revision in place.
 - All product references must exist in the generated material dataset. In
@@ -296,10 +302,11 @@ this single tool.
 ## API and database prerequisites
 
 Use the updated Catalog API (product listing, revision-number BOM lookup, and
-uniqueness-conflict responses). Regenerate the contract/client after API changes:
+uniqueness-conflict responses). Regenerate the contract/client after changing
+`contracts/catalog.tsp`:
 
 ```sh
-bash scripts/catalog-api-client.sh
+npm --prefix tools/Contracts.Generator run generate
 ```
 
 Building or running the seeder does **not** apply migrations. Deploy migrations
@@ -331,7 +338,7 @@ For the PostgreSQL/API integration test, point `CATALOG_SEED_TEST_CONNECTION` at
 **disposable PostgreSQL server**, using an account with `CREATEDB` permission:
 
 ```sh
-CATALOG_SEED_TEST_CONNECTION='Host=localhost;Port=55432;Database=postgres;Username=postgres;Password=test' \
+CATALOG_SEED_TEST_CONNECTION='Host=localhost;Port=15432;Database=postgres;Username=postgres;Password=postgres' \
   dotnet test tests/Catalog.Seed.Tests
 ```
 

@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      # Non-default host ports: Kiri/k8s or a local install often already own 5432/4222/8222.
+      # Non-default host ports: a local install or a Kubernetes-forwarded server often already owns 5432/4222/8222.
       - "15432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data

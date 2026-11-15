@@ -9,12 +9,10 @@ namespace Inventory.Worker;
 
 public class Worker(
     ILogger<Worker> logger,
-    INatsConnection nats,
+    InventoryNatsClient inventory,
     IServiceScopeFactory scopeFactory,
     IConfiguration? configuration = null) : BackgroundService
 {
-    private readonly InventoryNatsClient inventory = new(nats);
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
@@ -56,16 +54,18 @@ public class Worker(
             try
             {
                 message.EnsureSuccess();
-                if (message.Data is { } task)
+                if (message.Data is { } task &&
+                    await HandleGrabAsync(task, cancellationToken) is { Status: not InventoryGrabTaskStatus.Success } reply)
                 {
-                    await HandleGrabAsync(task, cancellationToken);
+                    logger.LogWarning("Grab task {TaskId} failed with {Status}: {Message}",
+                                      reply.RequestId, reply.Status, reply.ErrorMessage);
                 }
 
                 await message.AckAsync(cancellationToken: cancellationToken);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger.LogError(ex, "Error processing inventory command on {Subject}", message.Subject);
+                LogCommandError(ex, message.Subject);
                 await message.NakAsync(cancellationToken: cancellationToken);
             }
         }
@@ -79,6 +79,21 @@ public class Worker(
         var db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        var reservationId = task.ReservationId ?? Guid.CreateVersion7();
+        await db.Database.ExecuteSqlAsync(
+            $"""INSERT INTO "Reservations" ("Id", "Status") VALUES ({reservationId}, {(int)ReservationStatus.Reserved}) ON CONFLICT DO NOTHING""",
+            ct);
+        var reservation = (await LockReservationAsync(db, reservationId, ct))!;
+        // A release that ran first (e.g. Orders timed out on this reserve) leaves it Canceled; never revive it.
+        if (reservation.Status != ReservationStatus.Reserved)
+        {
+            return new InventoryReserveReplyV1(
+                task.Id,
+                reservationId,
+                InventoryReserveTaskStatus.Error,
+                $"Reservation {reservationId} is {reservation.Status}.");
+        }
 
         // FOR UPDATE cannot lock a missing row, so create it first; a concurrent first reserve waits here, then skips.
         var defaultStock = configuration?.GetValue<uint?>("Inventory:DefaultInitialStock") ?? 10000u;
@@ -101,25 +116,6 @@ public class Worker(
         }
 
         stock.Quantity -= task.Quantity;
-
-        var reservationId = task.ReservationId ?? Guid.CreateVersion7();
-        var reservation = await db.Reservations
-            .Include(r => r.Items)
-            .FirstOrDefaultAsync(r => r.Id == reservationId, ct);
-
-        if (reservation is null)
-        {
-            reservation = new Reservation
-            {
-                Id = reservationId,
-                Status = ReservationStatus.Reserved,
-            };
-            db.Reservations.Add(reservation);
-        }
-        else
-        {
-            reservation.Status = ReservationStatus.Reserved;
-        }
 
         var existingItem = reservation.Items.FirstOrDefault(i => i.MaterialId == task.MaterialId);
         if (existingItem is null)
@@ -156,13 +152,16 @@ public class Worker(
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-        var reservation = await db.Reservations
-            .Include(r => r.Items)
-            .FirstOrDefaultAsync(r => r.Id == task.ReservationId, ct);
-        if (reservation is null)
+        // A release that beats its reserve leaves a Canceled placeholder, so the late reserve is refused.
+        if (await db.Database.ExecuteSqlAsync(
+                $"""INSERT INTO "Reservations" ("Id", "Status") VALUES ({task.ReservationId}, {(int)ReservationStatus.Canceled}) ON CONFLICT DO NOTHING""",
+                ct) == 1)
         {
+            await tx.CommitAsync(ct);
             return new InventoryReleaseReplyV1(task.Id, InventoryReleaseTaskStatus.NotFound);
         }
+
+        var reservation = (await LockReservationAsync(db, task.ReservationId, ct))!;
 
         if (reservation.Status == ReservationStatus.Reserved)
         {
@@ -186,6 +185,21 @@ public class Worker(
         return new InventoryReleaseReplyV1(task.Id, InventoryReleaseTaskStatus.Released);
     }
 
+    // Reservation row lock until the transaction ends; every handler takes it before any stock lock.
+    private static async Task<Reservation?> LockReservationAsync(InventoryDbContext db, Guid id, CancellationToken ct)
+    {
+        var reservation = (await db.Reservations
+                                   .FromSql($"""SELECT * FROM "Reservations" WHERE "Id" = {id} FOR UPDATE""")
+                                   .ToListAsync(ct))
+            .SingleOrDefault();
+        if (reservation is not null)
+        {
+            await db.Entry(reservation).Collection(r => r.Items).LoadAsync(ct);
+        }
+
+        return reservation;
+    }
+
     // Row lock until the transaction ends, so concurrent reserve/release cannot lose an update.
     private static async Task<MaterialStock?> LockStockAsync(InventoryDbContext db, Guid materialId, CancellationToken ct) =>
         (await db.MaterialStocks
@@ -202,16 +216,14 @@ public class Worker(
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-        var reservation = await db.Reservations
-            .Include(r => r.Items)
-            .FirstOrDefaultAsync(r => r.Id == task.ReservationId, ct);
+        var reservation = await LockReservationAsync(db, task.ReservationId, ct);
 
-        if (reservation is null || reservation.Items.Count == 0)
+        if (reservation is not { Status: ReservationStatus.Reserved } || reservation.Items.Count == 0)
         {
             return new InventoryGrabReplyV1(
                 task.Id,
                 InventoryGrabTaskStatus.ReservationIsEmpty,
-                $"Reservation {task.ReservationId} was not found or has no items.");
+                $"Reservation {task.ReservationId} was not found, is not active or has no items.");
         }
 
         var item = reservation.Items.FirstOrDefault(i => i.MaterialId == task.MaterialId);

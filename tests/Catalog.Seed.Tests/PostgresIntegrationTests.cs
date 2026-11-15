@@ -10,22 +10,14 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Tests.Shared;
 using Domain = Manufacturing.Core.Models;
 
 namespace Catalog.Seed.Tests;
 
-public sealed class PostgresFactAttribute : FactAttribute
-{
-    public PostgresFactAttribute()
-    {
-        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CATALOG_SEED_TEST_CONNECTION")))
-            Skip = "Set CATALOG_SEED_TEST_CONNECTION to a disposable PostgreSQL server with CREATEDB permission.";
-    }
-}
-
 public class PostgresIntegrationTests
 {
-    [PostgresFact]
+    [PostgresFact("CATALOG_SEED_TEST_CONNECTION")]
     public async Task RealApiMigrationConflictsAndReruns()
     {
         var adminConnection = Environment.GetEnvironmentVariable("CATALOG_SEED_TEST_CONNECTION")!;

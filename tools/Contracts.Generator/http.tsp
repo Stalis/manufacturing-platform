@@ -5,10 +5,6 @@ using Http;
 
 namespace Manufacturing.Http;
 
-/** A UUID carried as a JSON string; maps to System.Guid. */
-@format("uuid")
-scalar Guid extends string;
-
 /** RFC 9457 problem details; the server uses Microsoft.AspNetCore.Mvc.ProblemDetails. */
 model ProblemDetails {
   type?: string;

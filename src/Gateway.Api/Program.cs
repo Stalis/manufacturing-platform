@@ -1,6 +1,7 @@
 using Catalog.Contracts;
 using Gateway.Api;
 using Gateway.Api.GraphQL;
+using Manufacturing.Nats.Contract;
 using NATS.Client.Core;
 using NATS.Client.Hosting;
 using Orders.Contracts;
@@ -39,6 +40,7 @@ builder.Services.AddNats(configureOpts: options =>
         ),
     });
 
+builder.Services.AddSingleton<ProducerNatsClient>();
 builder.Services.AddHostedService<NatsSubscriptionBridge>();
 
 builder.Services

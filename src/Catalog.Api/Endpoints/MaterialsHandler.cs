@@ -3,7 +3,7 @@ using Catalog.Contracts;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using static Catalog.Api.Endpoints.CatalogEndpoints;
+using static Catalog.Api.CatalogApiEndpoints;
 using Domain = Manufacturing.Core.Models;
 
 namespace Catalog.Api.Endpoints;
@@ -31,7 +31,7 @@ public sealed class MaterialsHandler(CatalogDbContext db) : IMaterialsHandler
         {
             SKU = input.Sku,
             Name = input.Name,
-            MeasurementUnit = ToDomain(input.MeasurementUnit),
+            MeasurementUnit = MapEnum<Domain.MeasurementUnit>(input.MeasurementUnit),
         };
 
         db.Materials.Add(material);
@@ -48,7 +48,7 @@ public sealed class MaterialsHandler(CatalogDbContext db) : IMaterialsHandler
 
         material.SKU = input.Sku;
         material.Name = input.Name;
-        material.MeasurementUnit = ToDomain(input.MeasurementUnit);
+        material.MeasurementUnit = MapEnum<Domain.MeasurementUnit>(input.MeasurementUnit);
         await db.SaveChangesAsync(cancellationToken);
 
         return TypedResults.NoContent();
@@ -67,7 +67,7 @@ public sealed class MaterialsHandler(CatalogDbContext db) : IMaterialsHandler
     }
 
     private static Material ToContract(Domain.Material material) =>
-        new(material.Id, material.SKU, material.Name, CatalogEndpoints.ToContract(material.MeasurementUnit));
+        new(material.Id, material.SKU, material.Name, MapEnum<MeasurementUnit>(material.MeasurementUnit));
 
     private static ProblemDetails Missing(Guid id) => Problem($"Material {id} was not found.");
 }

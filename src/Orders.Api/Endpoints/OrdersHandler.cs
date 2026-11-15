@@ -5,11 +5,11 @@ using Manufacturing.Nats.Contract;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using NATS.Client.Core;
 using Orders.Api.Persistence;
 using Orders.Core.Models;
 using Producer.Contracts.Models;
 using static Orders.Api.Endpoints.OrdersEndpoints;
+using static Orders.Api.OrdersApiEndpoints;
 using Contract = Orders.Contracts;
 using DomainBillOfMaterial = Manufacturing.Core.Models.BillOfMaterial;
 
@@ -18,8 +18,9 @@ namespace Orders.Api.Endpoints;
 public sealed class OrdersHandler(
     OrdersDbContext db,
     CatalogClient catalog,
-    INatsConnection nats,
-    ILogger<OrdersHandler> logger) : Contract.IOrdersHandler
+    ProducerNatsClient producer,
+    InventoryNatsClient inventory,
+    ILogger<OrdersHandler> logger) : IOrdersHandler
 {
     // One production task is created per unit; keep a single request from exhausting memory.
     private const int MaxQuantity = 10_000;
@@ -121,8 +122,6 @@ public sealed class OrdersHandler(
         order.Status = OrderStatus.WaitingForReserve;
         await db.SaveChangesAsync(cs);
 
-        var producer = new ProducerNatsClient(nats);
-        var inventory = new InventoryNatsClient(nats);
         var producerTasks = new List<ProducerTaskV1>();
         var orderItems = new List<Order.OrderItem>();
         var reservations = new List<Guid>();
@@ -154,12 +153,18 @@ public sealed class OrdersHandler(
                     // The order exists; the contract reports reservation failures through its Error status.
                     // Cleanup ignores the caller's cancellation so a half-reserved order is never left behind.
                     order.Status = OrderStatus.Error;
-                    var label = await MaterialLabelAsync(material.MaterialId, CancellationToken.None);
-                    order.ErrorMessage = reply?.Status == InventoryReserveTaskStatus.NotInStock
+                    string FailureMessage(string label) => reply?.Status == InventoryReserveTaskStatus.NotInStock
                         ? $"Insufficient stock for {label}: {totalNeeded} needed."
                         : $"Failed to reserve {label} in inventory.";
+                    order.ErrorMessage = FailureMessage($"material {material.MaterialId}");
                     await db.SaveChangesAsync(CancellationToken.None);
                     await ReleaseAsync(inventory, reservations, order.Id, CancellationToken.None);
+
+                    if (!cs.IsCancellationRequested)
+                    {
+                        order.ErrorMessage = FailureMessage(await MaterialLabelAsync(material.MaterialId, cs));
+                        await db.SaveChangesAsync(CancellationToken.None);
+                    }
 
                     return TypedResults.Created($"/api/orders/{order.Id}", ToContract(order));
                 }
@@ -192,24 +197,33 @@ public sealed class OrdersHandler(
             });
         }
 
-        // 2. Materials reserved -> transition to Reserved and persist tasks before publishing
+        // Once stock is reserved, a disconnected caller must not interrupt durable work.
         order.Items = orderItems;
         order.Status = OrderStatus.Reserved;
-        await db.SaveChangesAsync(cs);
-
-        // 3. Publish production tasks to JetStream
+        var attemptedReservations = new HashSet<Guid>();
         try
         {
+            await db.SaveChangesAsync(CancellationToken.None);
             foreach (var task in producerTasks)
             {
-                await producer.PublishStartV1Async(task, cs);
+                // A failed acknowledgement may still mean delivery; never release stock a producer may use.
+                attemptedReservations.Add(task.ReservationId!.Value);
+                await producer.PublishStartV1Async(task, CancellationToken.None);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             order.Status = OrderStatus.Error;
             order.ErrorMessage = $"Failed to enqueue production tasks: {ex.Message}";
-            await db.SaveChangesAsync(CancellationToken.None);
+            try
+            {
+                await db.SaveChangesAsync(CancellationToken.None);
+            }
+            finally
+            {
+                await ReleaseAsync(inventory, reservations.Where(id => !attemptedReservations.Contains(id)),
+                                   order.Id, CancellationToken.None);
+            }
             throw;
         }
 
@@ -224,9 +238,8 @@ public sealed class OrdersHandler(
             var material = await catalog.GetMaterialAsync(materialId, cancellationToken);
             return $"{material.Name} ({material.Sku})";
         }
-        // HttpClient reports its own timeout as TaskCanceledException; only the caller's cancellation propagates.
-        catch (Exception ex) when (ex is HttpRequestException ||
-                                   ex is TaskCanceledException && !cancellationToken.IsCancellationRequested)
+        // Label enrichment must never prevent returning the already-saved reservation failure.
+        catch (Exception)
         {
             return $"material {materialId}";
         }
@@ -240,7 +253,10 @@ public sealed class OrdersHandler(
         {
             try
             {
-                await inventory.RequestReleaseV1Async(new InventoryReleaseTaskV1(reservationId), cancellationToken);
+                var reply = await inventory.RequestReleaseV1Async(new InventoryReleaseTaskV1(reservationId), cancellationToken);
+                if (reply.Data?.Status == InventoryReleaseTaskStatus.NotFound)
+                    logger.LogWarning("Release preceded reserve for reservation {ReservationId} of order {OrderId}",
+                                      reservationId, orderId);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

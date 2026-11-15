@@ -10,6 +10,8 @@
 
     <ItemGroup>
         <PackageReference Include="coverlet.collector"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore"/>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational"/>
         <PackageReference Include="Microsoft.NET.Test.Sdk"/>
         <PackageReference Include="xunit"/>
         <PackageReference Include="xunit.runner.visualstudio"/>
@@ -20,6 +22,8 @@
     </ItemGroup>
 
     <ItemGroup>
+        <Compile Include="../Shared/PostgresFactAttribute.cs" Link="Shared/PostgresFactAttribute.cs"/>
+        <ProjectReference Include="../../src/Orders.Api/Orders.Api.csproj"/>
         <ProjectReference Include="..\..\src\Orders.Contracts\Orders.Contracts.csproj"/>
         <ProjectReference Include="..\..\src\Orders.Core\Orders.Core.csproj"/>
     </ItemGroup>

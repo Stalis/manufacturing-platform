@@ -11,7 +11,13 @@ namespace Orders.Contracts
         [property: global::System.Text.Json.Serialization.JsonPropertyName("status")] global::Orders.Contracts.OrderTaskStatus Status,
         [property: global::System.Text.Json.Serialization.JsonPropertyName("lastMessage")] string? LastMessage);
 
-    [global::System.Text.Json.Serialization.JsonConverter(typeof(global::System.Text.Json.Serialization.JsonStringEnumConverter<global::Orders.Contracts.OrderTaskStatus>))]
+    /// <summary>
+    /// Serializes contract enums by member name and rejects integer JSON values.
+    /// </summary>
+    public sealed class StrictStringEnumConverter<TEnum>() : global::System.Text.Json.Serialization.JsonStringEnumConverter<TEnum>(namingPolicy: null, allowIntegerValues: false)
+        where TEnum : struct, global::System.Enum;
+
+    [global::System.Text.Json.Serialization.JsonConverter(typeof(global::Orders.Contracts.StrictStringEnumConverter<global::Orders.Contracts.OrderTaskStatus>))]
     public enum OrderTaskStatus
     {
         Pending,
@@ -39,7 +45,7 @@ namespace Orders.Contracts
         [property: global::System.Text.Json.Serialization.JsonPropertyName("progressPercentage")] double ProgressPercentage,
         [property: global::System.Text.Json.Serialization.JsonPropertyName("items")] global::Orders.Contracts.OrderItem[] Items);
 
-    [global::System.Text.Json.Serialization.JsonConverter(typeof(global::System.Text.Json.Serialization.JsonStringEnumConverter<global::Orders.Contracts.OrderStatus>))]
+    [global::System.Text.Json.Serialization.JsonConverter(typeof(global::Orders.Contracts.StrictStringEnumConverter<global::Orders.Contracts.OrderStatus>))]
     public enum OrderStatus
     {
         Created,

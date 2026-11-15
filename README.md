@@ -49,6 +49,8 @@ flowchart TB
     subgraph Tooling["Contract-First & IaC"]
         YAML["contracts/nats.contract.yaml"]
         GEN["Roslyn Source Generator"]
+        TSP["contracts/*.tsp (TypeSpec)"]
+        CGEN["tools/Contracts.Generator"]
         TF["Terraform (yamldecode)"]
     end
 
@@ -82,6 +84,10 @@ flowchart TB
     GEN -. "Generates typed clients" .-> INV
     GEN -. "Generates typed clients" .-> PROD
     GEN -. "Generates typed clients" .-> GW
+    TSP -. "npm run generate" .-> CGEN
+    CGEN -. "DTOs, HTTP clients & handlers" .-> CAT
+    CGEN -. "DTOs, HTTP clients & handlers" .-> ORD
+    CGEN -. "HTTP clients" .-> GW
     YAML -. "yamldecode()" .-> TF
     TF -. "Provisioning" .-> Messaging
 ```
@@ -191,6 +197,7 @@ manufacturing-platform/
 │   └── Web.Client/                         # Frontend (React 19, Vite, Tailwind CSS v4, Apollo Client)
 ├── tests/
 │   ├── Catalog.Seed.Tests/                 # Catalog seeder & generator tests
+│   ├── Inventory.Worker.Tests/             # PostgreSQL reserve/release/grab stock tests
 │   └── Orders.Core.Tests/                  # Unit tests for BomSnapshot hashing & order progress lifecycle
 ├── tools/
 │   ├── Catalog.Seed/                       # CLI tool for seeding catalog data
@@ -251,6 +258,14 @@ Once started, services are available at:
    INVENTORY_TEST_CONNECTION='Host=localhost;Port=15432;Database=postgres;Username=postgres;Password=postgres' \
      dotnet test tests/Inventory.Worker.Tests
    ```
+   Orders cleanup integration tests additionally need `ORDERS_TEST_CONNECTION`
+   (same PostgreSQL requirements) and `ORDERS_TEST_NATS_URL` pointing at an
+   **isolated JetStream server**, not the application server: they own the
+   reserve/release subjects and temporarily create a production-task stream.
+   Without both variables these tests are skipped.
+
+   GraphQL revision fields and arguments now use `UnsignedInt`, not `Int`;
+   update explicit revision-variable declarations in external clients.
 
 3. Run the frontend dev server (proxies `/graphql` HTTP and WebSocket traffic to `http://localhost:5150`):
    ```bash

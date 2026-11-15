@@ -3,7 +3,7 @@ using Catalog.Contracts;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using static Catalog.Api.Endpoints.CatalogEndpoints;
+using static Catalog.Api.CatalogApiEndpoints;
 using Domain = Manufacturing.Core.Models;
 
 namespace Catalog.Api.Endpoints;

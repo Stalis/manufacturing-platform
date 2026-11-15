@@ -1,4 +1,5 @@
 using Catalog.Contracts;
+using Manufacturing.Nats.Contract;
 using Microsoft.EntityFrameworkCore;
 using NATS.Client.Core;
 using NATS.Client.Hosting;
@@ -35,6 +36,8 @@ builder.Services.AddNats(configureOpts: options =>
         ),
     });
 
+builder.Services.AddSingleton<ProducerNatsClient>();
+builder.Services.AddSingleton<InventoryNatsClient>();
 builder.Services.AddHostedService<OrderProgressTracker>();
 builder.Services.AddOrdersEndpoints();
 
@@ -53,15 +56,6 @@ if (!EF.IsDesignTime)
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-if (app.Environment.IsDevelopment())
-{
-    // Emitted from contracts/orders.tsp by tools/Contracts.Generator; not committed.
-    var openApi = Path.Combine(app.Environment.ContentRootPath, "openapi.json");
-    app.MapGet("/openapi/v1.json", () => File.Exists(openApi)
-        ? Results.File(openApi, "application/json")
-        : Results.Problem("Run `npm --prefix tools/Contracts.Generator run generate`.", statusCode: 404));
-}
-
-app.MapOrdersEndpoints();
+app.MapOrdersApi();
 
 app.Run();

@@ -4,9 +4,6 @@ using Manufacturing.CSharp;
 
 namespace Producer.Contracts.Models;
 
-@format("uuid")
-scalar Guid extends string;
-
 enum ProducerEventType {
   TaskStarted: 0,
   TaskCompleted: 1,

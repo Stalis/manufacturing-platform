@@ -3,26 +3,36 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { files as emitted } from "./emitter.mjs";
 
 // openapi output is a development artifact and is never compared by --check.
-const files = { models: "Models.g.cs", client: "Client.g.cs", server: "Server.g.cs", openapi: "openapi.json" };
-const usage = "Usage: node generate.mjs <input.tsp> <kind>=<output> [<kind>=<output>...] [<input.tsp> ...] [--check]\n" +
-  `Kinds: ${Object.keys(files).join(", ")}`;
+const files = { ...emitted, openapi: "openapi.json" };
+const usage = "Usage: node generate.mjs [<input.tsp> <kind>=<output> [<kind>=<output>...] ...] [--check]\n" +
+  `Kinds: ${Object.keys(files).join(", ")}. Without inputs, targets.json (paths relative to it) is used.`;
 
+const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const check = args.includes("--check");
+let base = process.cwd();
+let items = args.filter((item) => item !== "--check");
+if (items.length === 0) {
+  base = here;
+  const config = JSON.parse(await readFile(join(here, "targets.json"), "utf8"));
+  items = Object.entries(config).flatMap(([input, outputs]) =>
+    [input, ...Object.entries(outputs).map(([kind, output]) => `${kind}=${output}`)]);
+}
 const targets = [];
 let valid = true;
-for (const arg of args.filter((item) => item !== "--check")) {
+for (const arg of items) {
   const output = /^([a-z]+)=(.+)$/.exec(arg);
   if (output) {
     const target = targets.at(-1);
     if (!target || !(output[1] in files) || output[1] in target.outputs) valid = false;
-    else target.outputs[output[1]] = resolve(output[2]);
+    else target.outputs[output[1]] = resolve(base, output[2]);
   } else if (arg.startsWith("--")) {
     valid = false;
   } else {
-    targets.push({ input: resolve(arg), outputs: {} });
+    targets.push({ input: resolve(base, arg), outputs: {} });
   }
 }
 
@@ -30,7 +40,6 @@ if (!valid || targets.length === 0 || targets.some((target) => Object.keys(targe
   console.error(usage);
   process.exitCode = 1;
 } else {
-  const here = dirname(fileURLToPath(import.meta.url));
   const emitter = join(here, "emitter.mjs");
   const openapi = join(here, "node_modules", "@typespec", "openapi3");
   const staging = await mkdtemp(join(tmpdir(), "contracts-"));
