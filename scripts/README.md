@@ -195,7 +195,7 @@ For example, `@csharpRecord(true) model Cell<T> { Value: T; }` generates
 `public sealed record Cell<T>(T Value);`; a `Cell<string>` field retains that type.
 No envelope or runtime wrapper is added. Register the closed message types used
 by each service in its existing System.Text.Json source-generation context.
-The generator tests require the .NET 10 SDK: they compile generated generic
+The generator tests require the .NET 11 SDK: they compile generated generic
 records and exercise a nested closed generic message through JSON serialization.
 
 # Catalog seed data

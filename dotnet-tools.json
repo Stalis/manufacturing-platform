@@ -7,7 +7,7 @@
       "commands": [
         "dotnet-ef"
       ],
-      "rollForward": false
+      "rollForward": true
     },
     "nswag.consolecore": {
       "version": "14.7.1",

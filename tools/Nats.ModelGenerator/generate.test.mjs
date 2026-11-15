@@ -79,7 +79,7 @@ enum Status { Ready: 7 }
     const generated = run(input, output);
     assert.equal(generated.status, 0, generated.stdout + generated.stderr);
     await writeFile(join(directory, "Smoke.csproj"), `<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net11.0</TargetFramework></PropertyGroup>
 </Project>`);
     await writeFile(join(directory, "Program.cs"), `
 using System;

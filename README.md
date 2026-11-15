@@ -1,6 +1,6 @@
 # Manufacturing Platform
 
-A distributed, event-driven manufacturing management platform built with **.NET 10**, **NATS JetStream**, **PostgreSQL**, **HotChocolate GraphQL (BFF)**, and **React 19**.
+A distributed, event-driven manufacturing management platform built with **.NET 11**, **NATS JetStream**, **PostgreSQL**, **HotChocolate GraphQL (BFF)**, and **React 19**.
 
 ---
 
@@ -21,10 +21,10 @@ flowchart TB
     end
 
     subgraph BFF["API Gateway (BFF)"]
-        GW["Gateway.Api (.NET 10 + HotChocolate GraphQL)"]
+        GW["Gateway.Api (.NET 11 + HotChocolate GraphQL)"]
     end
 
-    subgraph Services["Microservices & Workers (.NET 10)"]
+    subgraph Services["Microservices & Workers (.NET 11)"]
         CAT["Catalog.Api (Minimal API)"]
         ORD["Orders.Api (Minimal API + Progress Tracker)"]
         INV["Inventory.Worker (BackgroundService)"]
