@@ -17,6 +17,8 @@ builder.Services.AddNats(
                         InventoryGrabTaskV1JsonContext.Default,
                         InventoryReserveTaskV1JsonContext.Default,
                         InventoryReserveReplyV1JsonContext.Default,
+                        InventoryReleaseTaskV1JsonContext.Default,
+                        InventoryReleaseReplyV1JsonContext.Default,
                         InventoryDeliveredEventV1JsonContext.Default
                         ),
         });

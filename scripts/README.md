@@ -136,6 +136,12 @@ client. Coordinate the switch without in-flight reservation requests; inspect
 and reconcile old queued reserve commands before removing that stream subject.
 JetStream ACK reply subjects must never be used for application responses.
 
+`inventory.tasks.release.v1` (Core request/reply, same queue group) returns the
+unconsumed quantities of a reservation to stock and marks it `Canceled`; repeats
+are no-ops. Orders.Api calls it for every reservation of an order whose later
+reservation failed. Reserve and release lock the stock row (`FOR UPDATE`), so
+running them concurrently cannot lose an update. Deploy Inventory before Orders.
+
 Build and regression checks:
 
 ```sh
@@ -143,66 +149,100 @@ dotnet build ManufacturingPlatform.slnx
 dotnet test tools/Manufacturing.Nats.Contracts.Generator/Manufacturing.Nats.Contracts.Generator.Tests
 ```
 
-# NATS message model generation
+# Contract code generation
 
-`contracts/producer-events.tsp` is the source of truth for `ProducerEventV1` and
-`ProducerEventType`. Do not edit `src/Producer.Contracts/Models/ProducerEventV1.cs`
-by hand. Other message DTOs and `contracts/nats.contract.yaml` are unchanged;
+TypeSpec files in `contracts/` are the source of truth for generated C#. Do not
+edit generated files by hand:
+
+| Contract | Generated |
+|---|---|
+| `producer-events.tsp` | `src/Producer.Contracts/Models/ProducerEventV1.cs` |
+| `catalog.tsp` | `src/Catalog.Contracts/Generated/*.g.cs` (DTOs, `CatalogClient`), `src/Catalog.Api/Generated/CatalogApi.g.cs` (handlers, `MapCatalogApi`) |
+| `orders.tsp` | `src/Orders.Contracts/Generated/*.g.cs` (DTOs, `OrdersClient`), `src/Orders.Api/Generated/OrdersApi.g.cs` (handlers, `MapOrdersApi`) |
+
+Other NATS message DTOs and `contracts/nats.contract.yaml` are unchanged;
 Terraform consumes only the topology YAML.
 
 Node.js 22 or newer is needed for generation, not for normal .NET builds or runtime:
 
 ```sh
-npm --prefix tools/Nats.ModelGenerator ci --ignore-scripts
-npm --prefix tools/Nats.ModelGenerator run generate
-npm --prefix tools/Nats.ModelGenerator run check
-npm --prefix tools/Nats.ModelGenerator test
+npm --prefix tools/Contracts.Generator ci --ignore-scripts
+npm --prefix tools/Contracts.Generator run generate
+npm --prefix tools/Contracts.Generator run check
+npm --prefix tools/Contracts.Generator test
 ```
 
-The wrapper invokes the pinned TypeSpec compiler and our emitter in-process.
-Compiler diagnostics fail the command. C# output replaces the destination only
-after successful compilation; `check` detects stale output without changing it.
-CI should run `ci`, `check`, the wrapper tests, and the normal .NET build.
-Generated C# is committed so consumers do not need Node.js to build.
+The wrapper invokes the pinned TypeSpec compiler, `@typespec/http` and our emitter
+in-process. Compiler diagnostics fail the command. Outputs replace their
+destinations only after every input compiles; `check` detects stale C# without
+changing it. CI should run `ci`, `check`, the wrapper tests, and the normal .NET
+build. Generated C# is committed so consumers do not need Node.js to build.
+`generate` also writes `src/Catalog.Api/openapi.json` and `src/Orders.Api/openapi.json`
+with `@typespec/openapi3`; they are git-ignored and served at `/openapi/v1.json`
+in Development (404 with a hint when not generated).
 
-For another input/output pair, use the same wrapper (the output directory must exist):
+For other inputs, pass each `.tsp` followed by its `kind=path` outputs; kinds are
+`models`, `client`, `server` and `openapi`:
 
 ```sh
-node tools/Nats.ModelGenerator/generate.mjs input.tsp output.cs [--check]
+node tools/Contracts.Generator/generate.mjs input.tsp models=Models.g.cs client=Client.g.cs [--check]
 ```
 
-The current emitter supports namespaced positional records, including generic
-records and nested closed generic field types, annotated with
-`@csharpRecord(true)` (sealed) or `@csharpRecord(false)`, explicit numeric int32
-enums, primitive string/boolean/int32/uint32/int64/uint64/float64/decimal fields,
-and UUID string scalars mapped to `System.Guid`. Type parameters become C# type
-parameters; template instances become references to the corresponding generic
-record, not duplicate declarations. TypeSpec default type arguments are resolved
-at each reference. `@doc` on declarations becomes
-XML documentation. Namespaces and property names are preserved; enum values
-remain numeric with the existing System.Text.Json contexts.
+## Models
 
-Optional fields, field defaults, unions, inheritance, generic parameter constraints
-and operations (including generic operations) fail generation rather than silently
-changing their semantics. Conflicting record/property/type-parameter names also
-fail without overwriting existing output. Define unsupported constructs'
-C# and JSON behavior before adding support. This is a DTO emitter, not a runtime
-validator for TypeSpec constraints. Generator changes must preserve wire format,
+The emitter supports namespaced positional records, including generic records
+and nested closed generic field types, annotated with `@csharpRecord(true)`
+(sealed) or `@csharpRecord(false)`; arrays (`T[]`); `T | null` (C# `T?`, the
+property stays required); primitive string/boolean/int32/uint32/int64/uint64/
+float64/decimal fields; and UUID string scalars mapped to `System.Guid`
+(`Manufacturing.Http.Guid` in HTTP contracts). The TypeSpec property name is the
+JSON name: a camelCase name becomes a PascalCase C# property with
+`[JsonPropertyName]`. Enums are either all explicit int32 values (numeric on the
+wire, as in NATS messages) or all value-less (string on the wire via
+`JsonStringEnumConverter`). Type parameters become C# type parameters; template
+instances become references to the corresponding generic record. `@doc` on
+declarations and operations becomes XML documentation.
+
+Optional fields, field defaults, other unions, inheritance, generic parameter
+constraints and generic operations fail generation rather than silently changing
+their semantics. Conflicting record/property/type-parameter names also fail
+without overwriting existing output. Define unsupported constructs' C# and JSON
+behavior before adding support. Generator changes must preserve wire format,
 constructor parameters and enum values; compiling DTOs alone does not establish
-message compatibility.
+message compatibility. Register closed NATS message types in each service's
+System.Text.Json source-generation context.
 
-For example, `@csharpRecord(true) model Cell<T> { Value: T; }` generates
-`public sealed record Cell<T>(T Value);`; a `Cell<string>` field retains that type.
-No envelope or runtime wrapper is added. Register the closed message types used
-by each service in its existing System.Text.Json source-generation context.
+## HTTP APIs
+
+An HTTP contract imports `tools/Contracts.Generator/http.tsp` (it re-exports
+`@typespec/http`) and declares one `@service` namespace whose operations live in
+interfaces. Operation names must be unique per service. For each interface
+`X` the server output declares `IXHandler`, one method per operation returning
+ASP.NET Core typed results (`Results<Ok<T>, NotFound<ProblemDetails>, …>`), and
+`Map{Service}Api()` binds every route to it. `Add{Service}Api()` registers problem
+details and the strict JSON options below; the API registers handler
+implementations in DI. The client output is one `{Service}Client` (an
+`HttpClient` typed client) with the same operations; non-success responses
+throw `HttpRequestException` whose `StatusCode` is set and whose message holds
+the problem body.
+
+Supported: required path parameters, one explicit `@body` of application/json,
+exact status codes 200/201/202/204/400/404/409/422 with at most one body, and
+errors through `Manufacturing.Http.BadRequest`/`NotFound`/`Conflict`
+(RFC 9457, `application/problem+json`). Query/header/cookie parameters,
+response headers, other status codes and successes with different body types
+fail generation. Each API sets `RespectNullableAnnotations` and
+`RespectRequiredConstructorParameters`, so bodies missing a required property are
+rejected with 400.
+
 The generator tests require the .NET 11 SDK: they compile generated generic
-records and exercise a nested closed generic message through JSON serialization.
+records, and run a generated server and client against each other over HTTP.
 
 # Catalog seed data
 
 `catalog_seed.json` defines 557 materials and 12 synthetic products. The .NET tool
-expands the definitions and reconciles them through the OpenAPI-generated
-`CatalogClient`. It uses `Manufacturing.Core.MeasurementUnit` for named units.
+expands the definitions and reconciles them through the generated
+`CatalogClient`. It uses the contract's `Catalog.Contracts.MeasurementUnit` for named units.
 
 Run from the repository root:
 

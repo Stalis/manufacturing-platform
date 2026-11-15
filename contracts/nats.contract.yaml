@@ -54,6 +54,11 @@ services:
         model: Inventory.Contracts.Models.InventoryReserveTaskV1
         reply_model: Inventory.Contracts.Models.InventoryReserveReplyV1
         queue_group: inventory-worker
+      release_v1:
+        subject: inventory.tasks.release.v1
+        model: Inventory.Contracts.Models.InventoryReleaseTaskV1
+        reply_model: Inventory.Contracts.Models.InventoryReleaseReplyV1
+        queue_group: inventory-worker
     streams:
       commands:
         name: INVENTORY_COMMANDS

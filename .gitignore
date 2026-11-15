@@ -506,3 +506,5 @@ override.tf.json
 .terraformrc
 terraform.rc
 
+# OpenAPI documents generated from contracts/*.tsp for local development
+src/*/openapi.json

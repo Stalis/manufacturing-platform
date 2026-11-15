@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Manufacturing.Core.Models;
+using Catalog.Contracts;
 
 namespace Catalog.Seed;
 

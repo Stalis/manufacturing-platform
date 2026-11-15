@@ -12,5 +12,11 @@ internal partial class InventoryReserveTaskV1JsonContext : JsonSerializerContext
 [JsonSerializable(typeof(InventoryReserveReplyV1))]
 internal partial class InventoryReserveReplyV1JsonContext : JsonSerializerContext;
 
+[JsonSerializable(typeof(InventoryReleaseTaskV1))]
+internal partial class InventoryReleaseTaskV1JsonContext : JsonSerializerContext;
+
+[JsonSerializable(typeof(InventoryReleaseReplyV1))]
+internal partial class InventoryReleaseReplyV1JsonContext : JsonSerializerContext;
+
 [JsonSerializable(typeof(InventoryDeliveredEventV1))]
 internal partial class InventoryDeliveredEventV1JsonContext : JsonSerializerContext;

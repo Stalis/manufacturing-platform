@@ -18,16 +18,17 @@ public class Worker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-        var reserve = inventory.RespondReserveV1Async(
-            HandleReserveAsync,
-            (ex, subject) => logger.LogError(ex, "Error processing inventory command on {Subject}", subject),
-            cancellation.Token);
-        var grab = ConsumeGrabAsync(cancellation.Token);
+        // Reserve and release run concurrently and both change stock; LockStockAsync serializes them per material.
+        Task[] loops =
+        [
+            inventory.RespondReserveV1Async(HandleReserveAsync, LogCommandError, cancellation.Token),
+            inventory.RespondReleaseV1Async(HandleReleaseAsync, LogCommandError, cancellation.Token),
+            ConsumeGrabAsync(cancellation.Token),
+        ];
 
         try
         {
-            var completed = await Task.WhenAny(reserve, grab);
-            await completed;
+            await await Task.WhenAny(loops);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
@@ -37,13 +38,16 @@ public class Worker(
             await cancellation.CancelAsync();
             try
             {
-                await Task.WhenAll(reserve, grab);
+                await Task.WhenAll(loops);
             }
-            catch (OperationCanceledException) when (!reserve.IsFaulted && !grab.IsFaulted)
+            catch (OperationCanceledException) when (!loops.Any(loop => loop.IsFaulted))
             {
             }
         }
     }
+
+    private void LogCommandError(Exception ex, string subject) =>
+        logger.LogError(ex, "Error processing inventory command on {Subject}", subject);
 
     private async Task ConsumeGrabAsync(CancellationToken cancellationToken)
     {
@@ -76,7 +80,7 @@ public class Worker(
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-        var stock = await db.MaterialStocks.FirstOrDefaultAsync(s => s.Id == task.MaterialId, ct);
+        var stock = await LockStockAsync(db, task.MaterialId, ct);
         if (stock is null)
         {
             var defaultStock = configuration?.GetValue<uint?>("Inventory:DefaultInitialStock") ?? 10000u;
@@ -146,6 +150,52 @@ public class Worker(
 
         return new InventoryReserveReplyV1(task.Id, reservationId, InventoryReserveTaskStatus.Success, null);
     }
+
+    public async Task<InventoryReleaseReplyV1> HandleReleaseAsync(
+        InventoryReleaseTaskV1 task,
+        CancellationToken ct)
+    {
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        var reservation = await db.Reservations
+            .Include(r => r.Items)
+            .FirstOrDefaultAsync(r => r.Id == task.ReservationId, ct);
+        if (reservation is null)
+        {
+            return new InventoryReleaseReplyV1(task.Id, InventoryReleaseTaskStatus.NotFound);
+        }
+
+        if (reservation.Status == ReservationStatus.Reserved)
+        {
+            // A fixed lock order keeps concurrent releases from deadlocking.
+            foreach (var item in reservation.Items.OrderBy(i => i.MaterialId))
+            {
+                if (await LockStockAsync(db, item.MaterialId, ct) is { } stock)
+                {
+                    stock.Quantity += item.Quantity - item.ConsumedQuantity;
+                }
+            }
+
+            reservation.Status = ReservationStatus.Canceled;
+            await db.SaveChangesAsync(ct);
+        }
+
+        await tx.CommitAsync(ct);
+
+        logger.LogInformation("Released reservation {ReservationId}", task.ReservationId);
+
+        return new InventoryReleaseReplyV1(task.Id, InventoryReleaseTaskStatus.Released);
+    }
+
+    // Row lock until the transaction ends, so concurrent reserve/release cannot lose an update.
+    private static async Task<MaterialStock?> LockStockAsync(InventoryDbContext db, Guid materialId, CancellationToken ct) =>
+        (await db.MaterialStocks
+                 .FromSql($"""SELECT * FROM "MaterialStocks" WHERE "Id" = {materialId} FOR UPDATE""")
+                 .ToListAsync(ct))
+        .SingleOrDefault();
 
     public async Task<InventoryGrabReplyV1> HandleGrabAsync(
         InventoryGrabTaskV1 task,

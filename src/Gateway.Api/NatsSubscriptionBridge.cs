@@ -1,8 +1,9 @@
-using Gateway.Api.Clients;
+using System.Net;
 using Gateway.Api.GraphQL;
 using HotChocolate.Subscriptions;
 using Manufacturing.Nats.Contract;
 using NATS.Client.Core;
+using Orders.Contracts;
 
 namespace Gateway.Api;
 
@@ -10,7 +11,7 @@ public sealed class NatsSubscriptionBridge(
     ILogger<NatsSubscriptionBridge> logger,
     INatsConnection nats,
     ITopicEventSender eventSender,
-    IOrdersClient ordersClient) : BackgroundService
+    OrdersClient ordersClient) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -31,11 +32,15 @@ public sealed class NatsSubscriptionBridge(
                     // Allow Orders.Api a brief moment to commit the updated task status
                     await Task.Delay(50, stoppingToken);
 
-                    var allOrders = await ordersClient.GetAllOrdersAsync(stoppingToken);
-                    var matchingOrder = allOrders.FirstOrDefault(o =>
-                        o.Items.Any(i => i.Tasks.Any(t => t.TaskId == producerEvent.TaskId)));
-
-                    var gqlOrder = matchingOrder is null ? null : OrderGql.FromCore(matchingOrder);
+                    OrderGql? gqlOrder = null;
+                    try
+                    {
+                        gqlOrder = OrderGql.FromContract(
+                            await ordersClient.GetOrderByTaskAsync(producerEvent.TaskId, stoppingToken));
+                    }
+                    catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                    {
+                    }
 
                     if (gqlOrder is not null)
                     {

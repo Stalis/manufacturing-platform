@@ -1,4 +1,4 @@
-using Manufacturing.Catalog.Client;
+using Catalog.Contracts;
 using Microsoft.EntityFrameworkCore;
 using NATS.Client.Core;
 using NATS.Client.Hosting;
@@ -8,8 +8,6 @@ using Orders.Api.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
-
 builder.Services.AddDbContext<OrdersDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("Orders")
@@ -17,7 +15,7 @@ builder.Services.AddDbContext<OrdersDbContext>(options =>
 );
 
 var catalogBaseUrl = builder.Configuration["CatalogApi:BaseUrl"] ?? "http://localhost:5142";
-builder.Services.AddHttpClient<ICatalogClient, CatalogClient>(client =>
+builder.Services.AddHttpClient<CatalogClient>(client =>
 {
     client.BaseAddress = new Uri(catalogBaseUrl);
 });
@@ -31,16 +29,18 @@ builder.Services.AddNats(configureOpts: options =>
             ProducerTaskV1JsonContext.Default,
             ProducerEventV1JsonContext.Default,
             InventoryReserveTaskV1JsonContext.Default,
-            InventoryReserveReplyV1JsonContext.Default
+            InventoryReserveReplyV1JsonContext.Default,
+            InventoryReleaseTaskV1JsonContext.Default,
+            InventoryReleaseReplyV1JsonContext.Default
         ),
     });
 
 builder.Services.AddHostedService<OrderProgressTracker>();
+builder.Services.AddOrdersEndpoints();
 
 var app = builder.Build();
 
-if (!EF.IsDesignTime &&
-    System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name != "GetDocument.Insider")
+if (!EF.IsDesignTime)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<OrdersDbContext>();
@@ -50,7 +50,17 @@ if (!EF.IsDesignTime &&
     }
 }
 
-if (app.Environment.IsDevelopment()) app.MapOpenApi();
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
+if (app.Environment.IsDevelopment())
+{
+    // Emitted from contracts/orders.tsp by tools/Contracts.Generator; not committed.
+    var openApi = Path.Combine(app.Environment.ContentRootPath, "openapi.json");
+    app.MapGet("/openapi/v1.json", () => File.Exists(openApi)
+        ? Results.File(openApi, "application/json")
+        : Results.Problem("Run `npm --prefix tools/Contracts.Generator run generate`.", statusCode: 404));
+}
 
 app.MapOrdersEndpoints();
 

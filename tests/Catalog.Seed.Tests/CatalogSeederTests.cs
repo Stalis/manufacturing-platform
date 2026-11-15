@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Manufacturing.Catalog.Client;
+using Catalog.Contracts;
 
 namespace Catalog.Seed.Tests;
 
@@ -11,9 +11,8 @@ public class CatalogSeederTests
     {
         return new SeedCatalog(
             [
-                new SeedMaterial("WIRE-24AWG-BLACK", "Wire 24 AWG Black",
-                                 Manufacturing.Core.Models.MeasurementUnit.Meter),
-                new SeedMaterial("PCB-2L", "PCB 2-layer", Manufacturing.Core.Models.MeasurementUnit.SquareCentimeter),
+                new SeedMaterial("WIRE-24AWG-BLACK", "Wire 24 AWG Black", MeasurementUnit.Meter),
+                new SeedMaterial("PCB-2L", "PCB 2-layer", MeasurementUnit.SquareCentimeter),
             ],
             [
                 new SeedProduct("PRODUCT-TEST", "Test board",
@@ -32,7 +31,8 @@ public class CatalogSeederTests
         Assert.Equal(4, server.Writes.Count);
         var ids = server.Materials.Select(m => m.Id).Append(server.Products.Single().Id).ToArray();
         server.Writes.Clear();
-        server.Boms.Values.Single().Materials = server.Boms.Values.Single().Materials.Reverse().ToArray();
+        var (productId, bom) = server.Boms.Single();
+        server.Boms[productId] = bom with { Materials = bom.Materials.Reverse().ToArray() };
         await seeder.RunAsync(seed);
         Assert.Empty(server.Writes);
         seed = seed with
@@ -77,14 +77,12 @@ public class CatalogSeederTests
         var seed = SmallSeed();
         await Assert.ThrowsAsync<InvalidDataException>(() => seeder.RunAsync(seed, true));
         Assert.Empty(server.Writes);
-        server.Materials.AddRange(seed.Materials.Select(m => new Material
-        {
-            Id = Guid.NewGuid(), Sku = m.Sku, Name = "Keep existing name", MeasurementUnit = (int)m.MeasurementUnit,
-        }));
-        server.Materials[0].MeasurementUnit = 0;
+        server.Materials.AddRange(seed.Materials.Select(m =>
+                                      new Material(Guid.NewGuid(), m.Sku, "Keep existing name", m.MeasurementUnit)));
+        server.Materials[0] = server.Materials[0] with { MeasurementUnit = MeasurementUnit.Each };
         await Assert.ThrowsAsync<InvalidDataException>(() => seeder.RunAsync(seed, true));
         Assert.Empty(server.Writes);
-        server.Materials[0].MeasurementUnit = 5;
+        server.Materials[0] = server.Materials[0] with { MeasurementUnit = MeasurementUnit.Meter };
         await seeder.RunAsync(seed, true, true);
         Assert.Empty(server.Writes);
         await seeder.RunAsync(seed, true);
@@ -115,10 +113,8 @@ public class CatalogSeederTests
             ],
         }));
         Assert.Empty(server.Writes);
-        server.Materials.AddRange(Enumerable.Range(0, 2).Select(_ => new Material
-        {
-            Id = Guid.NewGuid(), Sku = "DUPLICATE", Name = "Duplicate", MeasurementUnit = 0,
-        }));
+        server.Materials.AddRange(Enumerable.Range(0, 2).Select(_ =>
+                                      new Material(Guid.NewGuid(), "DUPLICATE", "Duplicate", MeasurementUnit.Each)));
         await Assert.ThrowsAsync<InvalidDataException>(() => seeder.RunAsync(seed));
         Assert.Empty(server.Writes);
     }
@@ -136,7 +132,7 @@ public class CatalogSeederTests
         await seeder.RunAsync(SmallSeed());
         Assert.Single(server.Writes);
         Assert.Equal(id, server.Products.Single().Id);
-        Assert.Equal(2, server.Boms[id].Materials.Count);
+        Assert.Equal(2, server.Boms[id].Materials.Length);
     }
 
     private sealed class CatalogHandler : HttpMessageHandler
@@ -156,32 +152,35 @@ public class CatalogSeederTests
             if (path == "/api/catalog/materials")
             {
                 if (method == "GET") return Reply(Materials);
-                var body = await request.Content!.ReadFromJsonAsync<Material>(Json, ct);
-                if (method == "POST")
-                {
-                    body!.Id = Guid.NewGuid();
-                    Materials.Add(body);
-                    return Reply(body, 201);
-                }
+                var body = await request.Content!.ReadFromJsonAsync<MaterialInput>(Json, ct);
+                var material = new Material(Guid.NewGuid(), body!.Sku, body.Name, body.MeasurementUnit);
+                Materials.Add(material);
+                return Reply(material, 201);
+            }
 
-                Materials[Materials.FindIndex(m => m.Id == body!.Id)] = body!;
+            if (path.StartsWith("/api/catalog/materials/") && method == "PUT")
+            {
+                var id = Guid.Parse(path.Split('/')[^1]);
+                var body = await request.Content!.ReadFromJsonAsync<MaterialInput>(Json, ct);
+                Materials[Materials.FindIndex(m => m.Id == id)] =
+                    new Material(id, body!.Sku, body.Name, body.MeasurementUnit);
                 return Reply(null, 204);
             }
 
             if (path == "/api/catalog/products")
             {
                 if (method == "GET") return Reply(Products);
-                var body = await request.Content!.ReadFromJsonAsync<Product>(Json, ct);
-                body!.Id = Guid.NewGuid();
-                Products.Add(body);
-                return Reply(body, 201);
+                var body = await request.Content!.ReadFromJsonAsync<ProductInput>(Json, ct);
+                var product = new Product(Guid.NewGuid(), body!.Sku, body.Name);
+                Products.Add(product);
+                return Reply(product, 201);
             }
 
             if (path.StartsWith("/api/catalog/products/") && method == "PUT")
             {
-                var body = await request.Content!.ReadFromJsonAsync<Product>(Json, ct);
-                Assert.EndsWith(body!.Id.ToString(), path);
-                Products[Products.FindIndex(p => p.Id == body.Id)] = body;
+                var id = Guid.Parse(path.Split('/')[^1]);
+                var body = await request.Content!.ReadFromJsonAsync<ProductInput>(Json, ct);
+                Products[Products.FindIndex(p => p.Id == id)] = new Product(id, body!.Sku, body.Name);
                 return Reply(null, 204);
             }
 

@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
-using Manufacturing.Core.Models;
+using Catalog.Contracts;
 
 namespace Catalog.Seed.Tests;
 

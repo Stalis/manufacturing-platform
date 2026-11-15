@@ -1,9 +1,9 @@
+using Catalog.Contracts;
 using Gateway.Api;
-using Gateway.Api.Clients;
 using Gateway.Api.GraphQL;
-using Manufacturing.Catalog.Client;
 using NATS.Client.Core;
 using NATS.Client.Hosting;
+using Orders.Contracts;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,13 +18,13 @@ builder.Services.AddCors(options =>
 });
 
 var catalogBaseUrl = builder.Configuration["CatalogApi:BaseUrl"] ?? "http://localhost:5142";
-builder.Services.AddHttpClient<ICatalogClient, CatalogClient>(client =>
+builder.Services.AddHttpClient<CatalogClient>(client =>
 {
     client.BaseAddress = new Uri(catalogBaseUrl);
 });
 
 var ordersBaseUrl = builder.Configuration["OrdersApi:BaseUrl"] ?? "http://localhost:5139";
-builder.Services.AddHttpClient<IOrdersClient, OrdersClient>(client =>
+builder.Services.AddHttpClient<OrdersClient>(client =>
 {
     client.BaseAddress = new Uri(ordersBaseUrl);
 });

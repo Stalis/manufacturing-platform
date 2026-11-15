@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using static Catalog.Api.Endpoints.CatalogEndpoints;
 
 namespace Catalog.Api.Endpoints;
 
@@ -20,8 +21,8 @@ public sealed class CatalogConflictFilter : IEndpointFilter
                                                   or "IX_BillOfMaterialItems_RevisionId_MaterialId",
                                               })
         {
-            return Results.Conflict(
-                "A record with this SKU, product/revision, or revision/material pair already exists.");
+            return TypedResults.Conflict(Problem(
+                "A record with this SKU, product/revision, or revision/material pair already exists."));
         }
         catch (DbUpdateException error) when (error.InnerException is PostgresException
                                               {
@@ -32,10 +33,10 @@ public sealed class CatalogConflictFilter : IEndpointFilter
             if (constraint == "FK_BillOfMaterialItems_Materials_MaterialId"
                 && HttpMethods.IsDelete(context.HttpContext.Request.Method))
             {
-                return Results.Conflict("Cannot delete a material that is referenced by a bill of material.");
+                return TypedResults.Conflict(Problem("Cannot delete a material that is referenced by a bill of material."));
             }
 
-            return Results.BadRequest("Referenced product, revision, or material does not exist.");
+            return TypedResults.BadRequest(Problem("Referenced product, revision, or material does not exist."));
         }
     }
 }

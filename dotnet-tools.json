@@ -8,13 +8,6 @@
         "dotnet-ef"
       ],
       "rollForward": true
-    },
-    "nswag.consolecore": {
-      "version": "14.7.1",
-      "commands": [
-        "nswag"
-      ],
-      "rollForward": false
     }
   }
 }

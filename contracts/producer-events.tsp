@@ -1,4 +1,4 @@
-import "../tools/Nats.ModelGenerator/decorators.tsp";
+import "../tools/Contracts.Generator/decorators.tsp";
 
 using Manufacturing.CSharp;
 
