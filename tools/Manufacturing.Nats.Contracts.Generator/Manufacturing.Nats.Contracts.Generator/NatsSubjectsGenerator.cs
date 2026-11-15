@@ -42,18 +42,24 @@ public class NatsSubjectsGenerator : IIncrementalGenerator
     
     private static void GenerateCode(SourceProductionContext context, ImmutableArray<ContractYamlData> files)
     {
+        var pending = new List<(string Name, string Source)>();
+        try
+        {
+        if (files.Length > 1)
+            throw new InvalidOperationException("Only one nats.contract.yaml may be supplied.");
         foreach (var (additionalText, ns) in files)
         {
             var gotText = additionalText.GetText(context.CancellationToken)?.ToString();
             if (string.IsNullOrWhiteSpace(gotText))
-            {
-                continue;
-            }
-            
+                throw new InvalidOperationException("NATS contract is empty.");
+
             var builder = new DeserializerBuilder()
                 .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                .WithDuplicateKeyChecking()
                 .Build();
-            var config = builder.Deserialize<NatsContractConfig>(gotText!);
+            var config = builder.Deserialize<NatsContractConfig>(gotText!)
+                ?? throw new InvalidOperationException("NATS contract is empty.");
+            TypedClients.Validate(config);
 
             const string className = "NatsContract";
 
@@ -113,9 +119,20 @@ public class NatsSubjectsGenerator : IIncrementalGenerator
             sourceLines.Add("}");
             sourceLines.Add("");
             
-            context.AddSource($"{className}.g.cs",
-                SourceText.From(string.Join("\n", [.. sourceLines]), Encoding.UTF8));
+            pending.Add(($"{className}.g.cs", string.Join("\n", sourceLines)));
+            pending.Add(("NatsClients.g.cs", TypedClients.Generate(config, ns)));
         }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                new DiagnosticDescriptor("NATS001", "Invalid NATS contract", "{0}",
+                    "NatsContract", DiagnosticSeverity.Error, true), Location.None, ex.Message));
+            return;
+        }
+
+        foreach (var (name, source) in pending)
+            context.AddSource(name, SourceText.From(source, Encoding.UTF8));
     }
 
     private static IEnumerable<string> GenerateServiceClassLines(
@@ -173,7 +190,7 @@ public class NatsSubjectsGenerator : IIncrementalGenerator
             "{",
         };
         var subjects = streamConfig.Subjects
-            .Select(kv => $"""public const string {kv.Key.ToPascalCase()} = "{baseSubject}.{kv.Value}";""")
+            .Select(kv => $"""public const string {kv.Key.ToPascalCase()} = "{baseSubject}.{kv.Value.Subject}";""")
             .Select(v => v.Indent(4));
         
         result.AddRange(subjects);

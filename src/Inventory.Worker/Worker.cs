@@ -1,12 +1,9 @@
-using System.Text.Json;
 using Inventory.Contracts.Models;
 using Inventory.DAL;
 using Inventory.DAL.Entities;
 using Manufacturing.Nats.Contract;
 using Microsoft.EntityFrameworkCore;
 using NATS.Client.Core;
-using NATS.Client.JetStream;
-using NATS.Net;
 
 namespace Inventory.Worker;
 
@@ -16,61 +13,56 @@ public class Worker(
     IServiceScopeFactory scopeFactory,
     IConfiguration? configuration = null) : BackgroundService
 {
+    private readonly InventoryNatsClient inventory = new(nats);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var js = nats.CreateJetStreamContext();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+        var reserve = inventory.RespondReserveV1Async(
+            HandleReserveAsync,
+            (ex, subject) => logger.LogError(ex, "Error processing inventory command on {Subject}", subject),
+            cancellation.Token);
+        var grab = ConsumeGrabAsync(cancellation.Token);
 
-        var consumer = await js.GetConsumerAsync(
-            NatsContract.Inventory.InventoryWorkerConsumer.StreamName,
-            NatsContract.Inventory.InventoryWorkerConsumer.DurableName,
-            stoppingToken);
-
-        await foreach (var message in consumer.ConsumeAsync<NatsMemoryOwner<byte>>(cancellationToken: stoppingToken))
+        try
         {
-            using (message.Data)
+            var completed = await Task.WhenAny(reserve, grab);
+            await completed;
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            try
             {
-                try
-                {
-                    if (message.Subject == NatsContract.Inventory.CommandStream.Subjects.ReserveV1)
-                    {
-                        var task = JsonSerializer.Deserialize(
-                            message.Data.Span,
-                            InventoryReserveTaskV1JsonContext.Default.InventoryReserveTaskV1);
-                        if (task is not null)
-                        {
-                            var reply = await HandleReserveAsync(task, stoppingToken);
-                            if (!string.IsNullOrEmpty(message.ReplyTo))
-                            {
-                                await nats.PublishAsync(message.ReplyTo, reply, cancellationToken: stoppingToken);
-                            }
-                        }
-                    }
-                    else if (message.Subject == NatsContract.Inventory.CommandStream.Subjects.GrabV1)
-                    {
-                        var task = JsonSerializer.Deserialize(
-                            message.Data.Span,
-                            InventoryGrabTaskV1JsonContext.Default.InventoryGrabTaskV1);
-                        if (task is not null)
-                        {
-                            var reply = await HandleGrabAsync(js, task, stoppingToken);
-                            if (!string.IsNullOrEmpty(message.ReplyTo))
-                            {
-                                await nats.PublishAsync(message.ReplyTo, reply, cancellationToken: stoppingToken);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        logger.LogWarning("Unknown inventory subject {Subject}", message.Subject);
-                    }
+                await Task.WhenAll(reserve, grab);
+            }
+            catch (OperationCanceledException) when (!reserve.IsFaulted && !grab.IsFaulted)
+            {
+            }
+        }
+    }
 
-                    await message.AckAsync(cancellationToken: stoppingToken);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+    private async Task ConsumeGrabAsync(CancellationToken cancellationToken)
+    {
+        await foreach (var message in inventory.ReadInventoryWorkerAsync(cancellationToken))
+        {
+            try
+            {
+                message.EnsureSuccess();
+                if (message.Data is { } task)
                 {
-                    logger.LogError(ex, "Error processing inventory command on {Subject}", message.Subject);
-                    await message.NakAsync(cancellationToken: stoppingToken);
+                    await HandleGrabAsync(task, cancellationToken);
                 }
+
+                await message.AckAsync(cancellationToken: cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Error processing inventory command on {Subject}", message.Subject);
+                await message.NakAsync(cancellationToken: cancellationToken);
             }
         }
     }
@@ -156,7 +148,6 @@ public class Worker(
     }
 
     public async Task<InventoryGrabReplyV1> HandleGrabAsync(
-        INatsJSContext js,
         InventoryGrabTaskV1 task,
         CancellationToken ct)
     {
@@ -203,11 +194,7 @@ public class Worker(
             task.Quantity,
             allConsumed);
 
-        var ack = await js.PublishAsync(
-            NatsContract.Inventory.EventStream.Subjects.DeliveredV1,
-            deliveredEvent,
-            cancellationToken: ct);
-        ack.EnsureSuccess();
+        await inventory.PublishDeliveredV1Async(deliveredEvent, ct);
 
         logger.LogInformation(
             "Grabbed and delivered {Quantity} of material {MaterialId} from reservation {ReservationId}",

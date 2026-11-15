@@ -3,8 +3,6 @@ using Manufacturing.Catalog.Client;
 using Manufacturing.Nats.Contract;
 using Microsoft.EntityFrameworkCore;
 using NATS.Client.Core;
-using NATS.Client.JetStream;
-using NATS.Net;
 using Orders.Api.Persistence;
 using Orders.Core.Models;
 using Producer.Contracts.Models;
@@ -125,7 +123,8 @@ public static class OrdersEndpoints
         order.Status = OrderStatus.WaitingForReserve;
         await db.SaveChangesAsync(cs);
 
-        var js = nats.CreateJetStreamContext();
+        var producer = new ProducerNatsClient(nats);
+        var inventory = new InventoryNatsClient(nats);
         var producerTasks = new List<ProducerTaskV1>();
         var orderItems = new List<Order.OrderItem>();
 
@@ -138,10 +137,7 @@ public static class OrdersEndpoints
                 var totalNeeded = (uint)(material.Quantity * item.Quantity);
                 var reserveTask = new InventoryReserveTaskV1(material.MaterialId, totalNeeded, reservationId);
 
-                var replyMsg = await nats.RequestAsync<InventoryReserveTaskV1, InventoryReserveReplyV1>(
-                    NatsContract.Inventory.CommandStream.Subjects.ReserveV1,
-                    reserveTask,
-                    cancellationToken: cs);
+                var replyMsg = await inventory.RequestReserveV1Async(reserveTask, cs);
 
                 if (replyMsg.Data is not { Status: InventoryReserveTaskStatus.Success })
                 {
@@ -191,11 +187,7 @@ public static class OrdersEndpoints
         {
             foreach (var task in producerTasks)
             {
-                var ack = await js.PublishAsync(
-                    NatsContract.Producer.CommandStream.Subjects.StartV1,
-                    task,
-                    cancellationToken: cs);
-                ack.EnsureSuccess();
+                await producer.PublishStartV1Async(task, cs);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

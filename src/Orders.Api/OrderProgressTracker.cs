@@ -1,7 +1,6 @@
 using Manufacturing.Nats.Contract;
 using Microsoft.EntityFrameworkCore;
 using NATS.Client.Core;
-using NATS.Net;
 using Orders.Api.Persistence;
 using Orders.Core.Models;
 using Producer.Contracts.Models;
@@ -15,14 +14,9 @@ public sealed class OrderProgressTracker(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var js = nats.CreateJetStreamContext();
+        var producer = new ProducerNatsClient(nats);
 
-        var consumer = await js.GetConsumerAsync(
-            NatsContract.Orders.OrdersApiProducerConsumer.StreamName,
-            NatsContract.Orders.OrdersApiProducerConsumer.DurableName,
-            stoppingToken);
-
-        await foreach (var message in consumer.ConsumeAsync<ProducerEventV1>(cancellationToken: stoppingToken))
+        await foreach (var message in producer.ReadOrdersApiProducerAsync(stoppingToken))
         {
             if (message.Data is not { } producerEvent || producerEvent.TaskId == Guid.Empty)
             {

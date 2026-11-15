@@ -9,4 +9,8 @@
 **/dist
 **/.terraform
 **/*.tfstate*
+**/*.tfplan
+**/*.tfvars
+**/*.tfvars.json
+**/*.creds
 **/TestResults

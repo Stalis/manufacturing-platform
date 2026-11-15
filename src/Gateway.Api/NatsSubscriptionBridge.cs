@@ -3,8 +3,6 @@ using Gateway.Api.GraphQL;
 using HotChocolate.Subscriptions;
 using Manufacturing.Nats.Contract;
 using NATS.Client.Core;
-using NATS.Net;
-using Producer.Contracts.Models;
 
 namespace Gateway.Api;
 
@@ -18,14 +16,9 @@ public sealed class NatsSubscriptionBridge(
     {
         try
         {
-            var js = nats.CreateJetStreamContext();
+            var producer = new ProducerNatsClient(nats);
 
-            var consumer = await js.GetConsumerAsync(
-                NatsContract.Gateway.GatewayApiProducerConsumer.StreamName,
-                NatsContract.Gateway.GatewayApiProducerConsumer.DurableName,
-                stoppingToken);
-
-            await foreach (var message in consumer.ConsumeAsync<ProducerEventV1>(cancellationToken: stoppingToken))
+            await foreach (var message in producer.ReadGatewayApiProducerAsync(stoppingToken))
             {
                 if (message.Data is not { } producerEvent)
                 {

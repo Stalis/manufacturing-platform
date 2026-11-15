@@ -7,7 +7,9 @@ services:
         retention: workqueue
         
         subjects:
-          start_v1: producer.tasks.start.v1
+          start_v1:
+            subject: producer.tasks.start.v1
+            model: Producer.Contracts.Models.ProducerTaskV1
       
         consumers:
           - durable_name: 'producer-worker'
@@ -19,11 +21,21 @@ services:
         retention: limits
         
         subjects:
-          started_v1: producer.events.started.v1
-          completed_v1: producer.events.completed.v1
-          failed_v1: producer.events.failed.v1
-          invalid_v1: producer.events.invalid.v1
-          stopped_v1: producer.events.stopped.v1
+          started_v1:
+            subject: producer.events.started.v1
+            model: Producer.Contracts.Models.ProducerEventV1
+          completed_v1:
+            subject: producer.events.completed.v1
+            model: Producer.Contracts.Models.ProducerEventV1
+          failed_v1:
+            subject: producer.events.failed.v1
+            model: Producer.Contracts.Models.ProducerEventV1
+          invalid_v1:
+            subject: producer.events.invalid.v1
+            model: Producer.Contracts.Models.ProducerEventV1
+          stopped_v1:
+            subject: producer.events.stopped.v1
+            model: Producer.Contracts.Models.ProducerEventV1
 
         consumers:
           - durable_name: 'orders-api-producer'
@@ -36,19 +48,25 @@ services:
               - producer.events.>
 
   inventory:
+    core_subjects:
+      reserve_v1:
+        subject: inventory.tasks.reserve.v1
+        model: Inventory.Contracts.Models.InventoryReserveTaskV1
+        reply_model: Inventory.Contracts.Models.InventoryReserveReplyV1
+        queue_group: inventory-worker
     streams:
       commands:
         name: INVENTORY_COMMANDS
         retention: workqueue
         
         subjects:
-          reserve_v1: inventory.tasks.reserve.v1
-          grab_v1: inventory.tasks.grab.v1
+          grab_v1:
+            subject: inventory.tasks.grab.v1
+            model: Inventory.Contracts.Models.InventoryGrabTaskV1
         
         consumers:
           - durable_name: 'inventory-worker'
             filter_subjects:
-              - inventory.tasks.reserve.>
               - inventory.tasks.grab.>
 
       events:
@@ -56,7 +74,9 @@ services:
         retention: limits
         
         subjects:
-          delivered_v1: inventory.events.delivered.v1
+          delivered_v1:
+            subject: inventory.events.delivered.v1
+            model: Inventory.Contracts.Models.InventoryDeliveredEventV1
         
         consumers:
           - durable_name: 'producer-worker-inventory'

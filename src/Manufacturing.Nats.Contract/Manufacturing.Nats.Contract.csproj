@@ -8,6 +8,12 @@
 
     <ItemGroup>
         <ProjectReference Include="..\..\tools\Manufacturing.Nats.Contracts.Generator\Manufacturing.Nats.Contracts.Generator\Manufacturing.Nats.Contracts.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
+        <ProjectReference Include="..\Producer.Contracts\Producer.Contracts.csproj"/>
+        <ProjectReference Include="..\Inventory.Contracts\Inventory.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="NATS.Net"/>
     </ItemGroup>
 
     <ItemGroup>

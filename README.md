@@ -8,9 +8,11 @@ A distributed, event-driven manufacturing management platform built with **.NET 
 
 The platform is built around a **Contract-First** messaging design for NATS JetStream and a **Backend-for-Frontend (GraphQL API Gateway)** pattern for the client application:
 
-- A single source-of-truth contract in [contracts/nats.contract.yaml](contracts/nats.contract.yaml) drives both:
-  1. **Roslyn Incremental Source Generator** (`Manufacturing.Nats.Contracts.Generator`) — generates the strongly typed `NatsContract` C# class at compile time with all streams, subjects, and durable consumers.
+- The messaging contract in [contracts/nats.contract.yaml](contracts/nats.contract.yaml) binds each subject to its DTO and transport and drives both:
+  1. **Roslyn Incremental Source Generator** (`Manufacturing.Nats.Contracts.Generator`) — generates `ProducerNatsClient`, `InventoryNatsClient`, and topology constants at compile time. Application code sends and reads messages through fixed, typed methods rather than choosing subjects and payload types independently.
   2. **Terraform** ([deploy/terraform/nats](deploy/terraform/nats)) — parses the exact same YAML file via the built-in `yamldecode` function to provision streams and durable consumers in NATS JetStream.
+- [contracts/producer-events.tsp](contracts/producer-events.tsp) defines `ProducerEventV1` and `ProducerEventType`. A pinned TypeSpec compiler and a local C# emitter generate the checked-in DTOs directly; no Roslyn intermediary or runtime Node.js dependency is involved. Other payload DTOs remain hand-written. See [generation commands](scripts/README.md#nats-message-model-generation).
+- Inventory reservation uses Core NATS request/reply with a queue-group responder; production tasks, inventory grabs, and events use JetStream. See [typed client usage and rollout](scripts/README.md#typed-nats-api-clients).
 
 ```mermaid
 flowchart TB
@@ -29,7 +31,8 @@ flowchart TB
         PROD["Producer.Worker (BackgroundService)"]
     end
 
-    subgraph Messaging["NATS JetStream"]
+    subgraph Messaging["NATS"]
+        CORE["Core request/reply: reserve.v1"]
         JS_IC["Stream: INVENTORY_COMMANDS"]
         JS_IE["Stream: INVENTORY_EVENTS"]
         JS_PC["Stream: PRODUCTION_COMMANDS"]
@@ -56,7 +59,8 @@ flowchart TB
     JS_PE -- "Consumer: gateway-api-producer" --> GW
 
     ORD -- "REST (ICatalogClient)" --> CAT
-    ORD -- "Request/Reply: reserve.v1" --> JS_IC
+    ORD <-- "Request/Reply: reserve.v1" --> CORE
+    CORE <-- "Queue responder: inventory-worker" --> INV
     ORD -- "Publish: start.v1" --> JS_PC
     JS_PE -- "Consumer: orders-api-producer" --> ORD
 
@@ -73,10 +77,10 @@ flowchart TB
     INV --> DB_INV
 
     YAML -. "AdditionalFiles" .-> GEN
-    GEN -. "Generates NatsContract" .-> ORD
-    GEN -. "Generates NatsContract" .-> INV
-    GEN -. "Generates NatsContract" .-> PROD
-    GEN -. "Generates NatsContract" .-> GW
+    GEN -. "Generates typed clients" .-> ORD
+    GEN -. "Generates typed clients" .-> INV
+    GEN -. "Generates typed clients" .-> PROD
+    GEN -. "Generates typed clients" .-> GW
     YAML -. "yamldecode()" .-> TF
     TF -. "Provisioning" .-> Messaging
 ```
@@ -163,7 +167,6 @@ manufacturing-platform/
 ├── contracts/
 │   └── nats.contract.yaml                  # Single source-of-truth NATS JetStream contract
 ├── deploy/
-│   ├── nats/init-jetstream.sh              # JetStream bootstrap script for Docker Compose
 │   ├── postgres/init.sql                   # Initializes Catalog, Orders, and Inventory databases
 │   └── terraform/nats/                     # Syncs NATS contract with JetStream via yamldecode
 ├── src/
@@ -197,11 +200,19 @@ manufacturing-platform/
 
 ### Option 1: Full Stack with Docker Compose (Recommended)
 
-Starts PostgreSQL, NATS JetStream, automatic stream/consumer initialization, EF Core startup migrations, all microservices, background workers, the GraphQL Gateway, and the React frontend:
+Requires Terraform 1.7+ in addition to Docker Compose. Provisioning is explicit:
+Terraform owns the NATS topology; containers do not create streams or consumers.
 
-```bash
-docker compose up --build
-```
+1. Start PostgreSQL and NATS:
+   ```bash
+   docker compose up -d postgres nats
+   ```
+2. Run the [local Terraform provisioning steps](scripts/README.md#nats-terraform-provisioning).
+   Existing Terraform state must be migrated first as described there.
+3. Only after a successful apply, start the applications:
+   ```bash
+   docker compose up --build
+   ```
 
 Once started, services are available at:
 - **Web UI (Control Center)**: [http://localhost:5173](http://localhost:5173)
@@ -212,11 +223,13 @@ Once started, services are available at:
 
 ### Option 2: Local Development (IDE or CLI)
 
-1. Start the infrastructure services (PostgreSQL, NATS, and JetStream bootstrap):
+1. Start the infrastructure and provision NATS:
    ```bash
-   docker compose up -d postgres nats nats-init
+   docker compose up -d postgres nats
    ```
-   *(Alternatively, provision NATS via Terraform in `deploy/terraform/nats`: `terraform init && terraform apply`).*
+   Follow the [Terraform environment/state workflow](scripts/README.md#nats-terraform-provisioning)
+   before launching workers or APIs. Compose waits for NATS to start, not for
+   Terraform; provisioning is an operator/CI step.
 
 2. Build the solution and run unit tests:
    ```bash

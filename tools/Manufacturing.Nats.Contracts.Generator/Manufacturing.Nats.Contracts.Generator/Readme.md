@@ -1,29 +1,17 @@
-# Roslyn Source Generators Sample
+# NATS contract generator
 
-A set of three projects that illustrates Roslyn source generators. Enjoy this template to learn from and modify source generators for your own needs.
+`nats.contract.yaml` is an AdditionalFile. The generator emits topology constants in `NatsContract` and sealed service clients in its `TargetNamespace` (or assembly namespace).
 
-## Content
-### Manufacturing.Nats.Contracts.Generator
-A .NET Standard project with implementations of sample source generators.
-**You must build this project to see the result (generated code) in the IDE.**
+Every subject entry contains its literal `subject` and fully qualified C# `model`. `services.*.streams.*.subjects` entries use JetStream; `services.*.core_subjects` entries use Core NATS. Transport is determined by placement, not a repeated field. Entry keys determine method names and service containers determine client ownership; no subject parsing or separate binding table is needed.
 
-- [SampleSourceGenerator.cs](SampleSourceGenerator.cs): A source generator that creates C# classes based on a text file (in this case, Domain Driven Design ubiquitous language registry).
-- [SampleIncrementalSourceGenerator.cs](SampleIncrementalSourceGenerator.cs): A source generator that creates a custom report based on class properties. The target class should be annotated with the `Generators.ReportAttribute` attribute.
+Optional `reply_model` is supported only for Core bindings and requires an explicit `queue_group`. JetStream replies are rejected because their ReplyTo is an acknowledgement subject, not the original requester's inbox.
 
-### Manufacturing.Nats.Contracts.Generator.Sample
-A project that references source generators. Note the parameters of `ProjectReference` in [Manufacturing.Nats.Contracts.Generator.Sample.csproj](../Manufacturing.Nats.Contracts.Generator.Sample/Manufacturing.Nats.Contracts.Generator.Sample.csproj), they make sure that the project is referenced as a set of source generators. 
+Generated APIs:
 
-### Manufacturing.Nats.Contracts.Generator.Tests
-Unit tests for source generators. The easiest way to develop language-related features is to start with unit tests.
+- `Publish{Key}Async(Model, CancellationToken)` fixes the subject and transport. JetStream publishes check acknowledgement success.
+- Core bindings with replies additionally produce `Request{Key}Async` returning `ValueTask<NatsMsg<Reply>>` and `Respond{Key}Async(Func<Model, CancellationToken, Task<Reply>>, Action<Exception, string>, CancellationToken)`. Responders check deserialization errors, invoke the handler for non-null payloads, and reply only when an inbox is present. Non-cancellation errors are reported to the supplied callback; Core messages have no ACK/NAK or redelivery guarantee.
+- `Read{DurableName}Async(CancellationToken)` fixes the stream, durable consumer and DTO type and yields `INatsJSMsg<Model>`, preserving caller-controlled ACK/NAK. Consumers matching different DTO types are rejected.
 
-## How To?
-### How to debug?
-- Use the [launchSettings.json](Properties/launchSettings.json) profile.
-- Debug tests.
+Clients use the connection's serializer registry, so applications retain their source-generated JSON context registrations. DTO existence and caller payload mismatches are checked by C# compilation against the referenced contract projects.
 
-### How can I determine which syntax nodes I should expect?
-Consider using the Roslyn Visualizer tool window, which allows you to observe the syntax tree.
-
-### How to learn more about wiring source generators?
-Watch the walkthrough video: [Let’s Build an Incremental Source Generator With Roslyn, by Stefan Pölz](https://youtu.be/azJm_Y2nbAI)
-The complete set of information is available in [Source Generators Cookbook](https://github.com/dotnet/roslyn/blob/main/docs/features/source-generators.cookbook.md).
+Malformed YAML, duplicate keys/subjects, missing subjects or models, invalid queue groups, JetStream reply metadata, and unsupported consumers produce build diagnostic `NATS001` with no generated source. The test project compiles generated clients against the real NATS and contract assemblies and checks invalid contracts without pinning generated source text.

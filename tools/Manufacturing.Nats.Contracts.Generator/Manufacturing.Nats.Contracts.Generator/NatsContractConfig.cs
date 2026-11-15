@@ -2,11 +2,19 @@ namespace Manufacturing.Nats.Contracts.Generator;
 
 public class NatsContractConfig
 {
+    public class SubjectConfig
+    {
+        public string Subject { get; set; } = string.Empty;
+        public string Model { get; set; } = string.Empty;
+        public string? ReplyModel { get; set; }
+        public string? QueueGroup { get; set; }
+    }
+
     public class StreamConfig
     {
         public string Name { get; set; } = string.Empty;
         public string Retention { get; set; } = string.Empty;
-        public Dictionary<string, string> Subjects { get; set; } = [];
+        public Dictionary<string, SubjectConfig> Subjects { get; set; } = [];
         public List<ConsumerConfig> Consumers { get; set; } = [];
     }
 
@@ -26,6 +34,7 @@ public class NatsContractConfig
     public class Service
     {
         public StreamsConfig Streams { get; set; } = new();
+        public Dictionary<string, SubjectConfig> CoreSubjects { get; set; } = [];
     }
     
     public string BaseSubject { get; set; } = string.Empty;

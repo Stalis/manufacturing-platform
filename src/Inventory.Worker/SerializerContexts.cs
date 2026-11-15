@@ -6,9 +6,6 @@ namespace Inventory.Worker;
 [JsonSerializable(typeof(InventoryGrabTaskV1))]
 internal partial class InventoryGrabTaskV1JsonContext : JsonSerializerContext;
 
-[JsonSerializable(typeof(InventoryGrabReplyV1))]
-internal partial class InventoryGrabReplyV1JsonContext : JsonSerializerContext;
-
 [JsonSerializable(typeof(InventoryReserveTaskV1))]
 internal partial class InventoryReserveTaskV1JsonContext : JsonSerializerContext;
 

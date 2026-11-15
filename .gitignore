@@ -496,6 +496,9 @@ crash.log
 crash.*.log
 *.tfvars
 *.tfvars.json
+!deploy/terraform/nats/environments/local.tfvars
+*.tfplan
+*.creds
 override.tf
 override.tf.json
 *_override.tf

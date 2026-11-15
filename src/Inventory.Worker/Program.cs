@@ -14,7 +14,6 @@ builder.Services.AddNats(
                 Url = builder.Configuration["NATS:Url"] ?? NatsOpts.Default.Url,
                 Name = "Manufacturing.Inventory.Worker",
                 SerializerRegistry = new NatsJsonContextSerializerRegistry(
-                        InventoryGrabReplyV1JsonContext.Default,
                         InventoryGrabTaskV1JsonContext.Default,
                         InventoryReserveTaskV1JsonContext.Default,
                         InventoryReserveReplyV1JsonContext.Default,

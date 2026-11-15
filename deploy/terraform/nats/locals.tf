@@ -10,7 +10,7 @@ locals {
         name      = stream.name
         retention = stream.retention
         subjects = [
-          for _, subject in stream.subjects : "${local.base_subject}.${subject}"
+          for _, subject in stream.subjects : "${local.base_subject}.${subject.subject}"
         ]
       }
     }
