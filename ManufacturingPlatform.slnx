@@ -21,6 +21,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Catalog.Seed.Tests/Catalog.Seed.Tests.csproj" />
+    <Project Path="tests/Inventory.Worker.Tests/Inventory.Worker.Tests.csproj" />
     <Project Path="tests/Orders.Core.Tests/Orders.Core.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">

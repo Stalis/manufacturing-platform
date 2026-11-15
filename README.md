@@ -244,6 +244,13 @@ Once started, services are available at:
    dotnet build ManufacturingPlatform.slnx
    dotnet test ManufacturingPlatform.slnx --filter "FullyQualifiedName!~PostgresIntegrationTests"
    ```
+   Inventory stock tests (reserve/release against PostgreSQL) are skipped unless
+   `INVENTORY_TEST_CONNECTION` points at a disposable server with `CREATEDB`; each run
+   creates and drops an `inventory_test_*` database:
+   ```bash
+   INVENTORY_TEST_CONNECTION='Host=localhost;Port=15432;Database=postgres;Username=postgres;Password=postgres' \
+     dotnet test tests/Inventory.Worker.Tests
+   ```
 
 3. Run the frontend dev server (proxies `/graphql` HTTP and WebSocket traffic to `http://localhost:5150`):
    ```bash

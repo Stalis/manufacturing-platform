@@ -80,20 +80,16 @@ public class Worker(
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
 
-        var stock = await LockStockAsync(db, task.MaterialId, ct);
-        if (stock is null)
+        // FOR UPDATE cannot lock a missing row, so create it first; a concurrent first reserve waits here, then skips.
+        var defaultStock = configuration?.GetValue<uint?>("Inventory:DefaultInitialStock") ?? 10000u;
+        if (defaultStock > 0)
         {
-            var defaultStock = configuration?.GetValue<uint?>("Inventory:DefaultInitialStock") ?? 10000u;
-            if (defaultStock > 0)
-            {
-                stock = new MaterialStock
-                {
-                    Id = task.MaterialId,
-                    Quantity = defaultStock,
-                };
-                db.MaterialStocks.Add(stock);
-            }
+            await db.Database.ExecuteSqlAsync(
+                $"""INSERT INTO "MaterialStocks" ("Id", "Quantity") VALUES ({task.MaterialId}, {(long)defaultStock}) ON CONFLICT DO NOTHING""",
+                ct);
         }
+
+        var stock = await LockStockAsync(db, task.MaterialId, ct);
 
         if (stock is null || stock.Quantity < task.Quantity)
         {

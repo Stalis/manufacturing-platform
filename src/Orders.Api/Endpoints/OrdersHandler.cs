@@ -137,18 +137,29 @@ public sealed class OrdersHandler(
                 var totalNeeded = (uint)((long)material.Quantity * item.Quantity);
                 var reserveTask = new InventoryReserveTaskV1(material.MaterialId, totalNeeded, reservationId);
 
-                var replyMsg = await inventory.RequestReserveV1Async(reserveTask, cs);
+                InventoryReserveReplyV1? reply = null;
+                try
+                {
+                    reply = (await inventory.RequestReserveV1Async(reserveTask, cs)).Data;
+                }
+                // A timeout, a worker error (no reply) or the caller's cancellation can leave earlier materials reserved.
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Reserve request for material {MaterialId} of order {OrderId} failed",
+                                      material.MaterialId, order.Id);
+                }
 
-                if (replyMsg.Data is not { Status: InventoryReserveTaskStatus.Success })
+                if (reply is not { Status: InventoryReserveTaskStatus.Success })
                 {
                     // The order exists; the contract reports reservation failures through its Error status.
+                    // Cleanup ignores the caller's cancellation so a half-reserved order is never left behind.
                     order.Status = OrderStatus.Error;
-                    var label = await MaterialLabelAsync(material.MaterialId, cs);
-                    order.ErrorMessage = replyMsg.Data?.Status == InventoryReserveTaskStatus.NotInStock
+                    var label = await MaterialLabelAsync(material.MaterialId, CancellationToken.None);
+                    order.ErrorMessage = reply?.Status == InventoryReserveTaskStatus.NotInStock
                         ? $"Insufficient stock for {label}: {totalNeeded} needed."
                         : $"Failed to reserve {label} in inventory.";
-                    await db.SaveChangesAsync(cs);
-                    await ReleaseAsync(inventory, reservations, order.Id, cs);
+                    await db.SaveChangesAsync(CancellationToken.None);
+                    await ReleaseAsync(inventory, reservations, order.Id, CancellationToken.None);
 
                     return TypedResults.Created($"/api/orders/{order.Id}", ToContract(order));
                 }
