@@ -9,6 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
         <PackageReference Include="coverlet.collector"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore"/>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Relational"/>
@@ -26,6 +27,8 @@
         <ProjectReference Include="../../src/Orders.Api/Orders.Api.csproj"/>
         <ProjectReference Include="..\..\src\Orders.Contracts\Orders.Contracts.csproj"/>
         <ProjectReference Include="..\..\src\Orders.Core\Orders.Core.csproj"/>
+        <ProjectReference Include="../../src/Producer.Worker/Producer.Worker.csproj"/>
+        <ProjectReference Include="../../src/Gateway.Api/Gateway.Api.csproj"/>
     </ItemGroup>
 
 </Project>

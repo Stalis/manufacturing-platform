@@ -13,6 +13,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <InternalsVisibleTo Include="Orders.Core.Tests" />
       <ProjectReference Include="..\Inventory.Contracts\Inventory.Contracts.csproj" />
       <ProjectReference Include="..\Manufacturing.Nats.Contract\Manufacturing.Nats.Contract.csproj" />
       <ProjectReference Include="..\Producer.Contracts\Producer.Contracts.csproj" />
