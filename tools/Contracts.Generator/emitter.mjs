@@ -407,7 +407,7 @@ function renderClient(service) {
       const result = item.success[0]?.client;
       const names = new Map(item.parameters.map((parameter) => [parameter.wire, parameter.name]));
       const path = item.path.replace(/^\//, "").replace(/["\\]/g, "\\$&")
-        .replace(/\{([^}]+)\}/g, (_, wire) => `{ContractHttp.Path(${names.get(wire)})}`);
+        .replace(/\{([^{}]+)\}/g, (_, wire) => `{ContractHttp.Path(${names.get(wire)})}`);
       const codes = item.success.map((response) => response.status).join(" or ");
       methods.push(`${item.doc}public async ${task}${result ? `<${result}>` : ""} ${item.name}Async(${signature(item, true)})\n{\n` +
         `    using var request_ = new global::System.Net.Http.HttpRequestMessage(new global::System.Net.Http.HttpMethod(${JSON.stringify(item.verb)}), $"${path}");\n` +

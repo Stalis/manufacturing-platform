@@ -2,7 +2,9 @@ using System.Data;
 using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
+using System.Reflection;
 using Catalog.Contracts;
+using Inventory.Contracts.Models;
 using Manufacturing.Nats.Contract;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -144,6 +146,55 @@ public class OrdersServiceTests
     }
 
     [Fact]
+    public async Task CreateOrderCoversNotInStockLabelFallbackAndPublishFailure()
+    {
+        var productId = Guid.CreateVersion7();
+        var materialId = Guid.CreateVersion7();
+        var reserveStatus = InventoryReserveTaskStatus.NotInStock;
+
+        var proxy = DispatchProxy.Create<INatsConnection, NatsProxy>();
+        ((NatsProxy)(object)proxy).Handler = (subject, req) => subject switch
+        {
+            "manufacturing.inventory.tasks.reserve.v1" when req is InventoryReserveTaskV1 r =>
+                ValueTask.FromResult(new NatsMsg<InventoryReserveReplyV1>
+                {
+                    Data = new InventoryReserveReplyV1(r.Id, r.ReservationId, reserveStatus, null),
+                }),
+            "manufacturing.inventory.tasks.release.v1" when req is InventoryReleaseTaskV1 rel =>
+                ValueTask.FromResult(new NatsMsg<InventoryReleaseReplyV1>
+                {
+                    Data = new InventoryReleaseReplyV1(rel.Id, InventoryReleaseTaskStatus.NotFound),
+                }),
+            _ => throw new NatsException("publish failed"),
+        };
+
+        await using var db = CreateDb(_ => Empty());
+        await using var unreachable = UnreachableNats();
+        using var http = new HttpClient(new StubHandler(req =>
+            req.RequestUri!.AbsolutePath.Contains("/bill-of-material/")
+                ? Reply(new BillOfMaterial(productId, 1, [new(materialId, 2)]), HttpStatusCode.OK)
+                : new HttpResponseMessage(HttpStatusCode.InternalServerError)))
+            { BaseAddress = new Uri("http://catalog/") };
+
+        var handler = new OrdersHandler(
+            db, new CatalogClient(http), new ProducerNatsClient(unreachable), new InventoryNatsClient(proxy),
+            NullLogger<OrdersHandler>.Instance);
+
+        // NotInStock + Catalog material lookup failure falls back to "material {id}"
+        var notInStock = await handler.CreateOrderAsync(
+            new CreateOrderRequest([new CreateOrderItem(productId, 1, 3)]), default);
+        var created = Assert.IsType<Created<Order>>(notInStock.Result).Value!;
+        Assert.Equal(OrderStatus.Error, created.Status);
+        Assert.Equal($"Insufficient stock for material {materialId}: 6 needed.", created.ErrorMessage);
+
+        // Reserve succeeds -> creates tasks, then producer publish failure marks order Error and rethrows
+        db.ChangeTracker.Clear();
+        reserveStatus = InventoryReserveTaskStatus.Success;
+        await Assert.ThrowsAnyAsync<NatsException>(() => handler.CreateOrderAsync(
+            new CreateOrderRequest([new CreateOrderItem(productId, 1, 2)]), default));
+    }
+
+    [Fact]
     public async Task OrderProgressTrackerUpdatesTaskLifecycleAndIgnoresUnknownTasks()
     {
         var orderId = Guid.CreateVersion7();
@@ -276,9 +327,9 @@ public class OrdersServiceTests
         return new OrdersDbContext(options);
     }
 
-    private static DbDataReader Empty() => new DataTable().CreateDataReader();
+    private static DataTableReader Empty() => new DataTable().CreateDataReader();
 
-    private static DbDataReader OrderRow(Guid id, string? errorMessage, string status, string itemsJson)
+    private static DataTableReader OrderRow(Guid id, string? errorMessage, string status, string itemsJson)
     {
         var table = new DataTable();
         table.Columns.Add("id", typeof(Guid));
@@ -321,5 +372,18 @@ public class OrdersServiceTests
         public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
             DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken ct = default) =>
             ValueTask.FromResult(InterceptionResult<DbDataReader>.SuppressWithResult(responder(command)));
+    }
+
+    public class NatsProxy : DispatchProxy
+    {
+        public Func<string, object?, object?>? Handler { get; set; }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) =>
+            targetMethod?.Name switch
+            {
+                "get_Opts" => NatsOpts.Default,
+                "RequestAsync" when args is [string subject, var req, ..] => Handler!(subject, req),
+                _ => null,
+            };
     }
 }

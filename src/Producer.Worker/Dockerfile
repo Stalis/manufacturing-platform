@@ -11,4 +11,5 @@ RUN dotnet publish src/Producer.Worker/Producer.Worker.csproj -c Release -o /app
 FROM mcr.microsoft.com/dotnet/runtime:11.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+USER $APP_UID
 ENTRYPOINT ["dotnet", "Producer.Worker.dll"]

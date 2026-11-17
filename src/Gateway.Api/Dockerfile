@@ -11,5 +11,6 @@ RUN dotnet publish src/Gateway.Api/Gateway.Api.csproj -c Release -o /app/publish
 FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+USER $APP_UID
 EXPOSE 5150
 ENTRYPOINT ["dotnet", "Gateway.Api.dll"]

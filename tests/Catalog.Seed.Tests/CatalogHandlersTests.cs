@@ -205,7 +205,7 @@ public class CatalogHandlersTests
 
         var result = await filter.InvokeAsync(context, _ => throw new DbUpdateException("db error", pgError));
 
-        var statusResult = Assert.IsAssignableFrom<IStatusCodeHttpResult>(result);
+        var statusResult = Assert.IsType<IStatusCodeHttpResult>(result, exactMatch: false);
         Assert.Equal(expectedStatus, statusResult.StatusCode);
     }
 
@@ -277,9 +277,9 @@ public class CatalogHandlersTests
         return new CatalogDbContext(options);
     }
 
-    private static DbDataReader Empty() => new DataTable().CreateDataReader();
+    private static DataTableReader Empty() => new DataTable().CreateDataReader();
 
-    private static DbDataReader Table(params (string Name, object Value)[] columns)
+    private static DataTableReader Table(params (string Name, object Value)[] columns)
     {
         var table = new DataTable();
         foreach (var (name, value) in columns)

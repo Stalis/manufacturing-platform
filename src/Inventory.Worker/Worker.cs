@@ -180,7 +180,10 @@ public class Worker(
 
         await tx.CommitAsync(ct);
 
-        logger.LogInformation("Released reservation {ReservationId}", task.ReservationId);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Released reservation {ReservationId}", task.ReservationId);
+        }
 
         return new InventoryReleaseReplyV1(task.Id, InventoryReleaseTaskStatus.Released);
     }
