@@ -1,11 +1,13 @@
 using Inventory.DAL;
 using Inventory.Worker;
+using Manufacturing.Nats.Contract;
 using Microsoft.EntityFrameworkCore;
 using NATS.Client.Core;
 using NATS.Client.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddSingleton<InventoryNatsClient>();
 builder.Services.AddDbContext<InventoryDbContext>(options => 
         options.UseNpgsql(builder.Configuration.GetConnectionString("Inventory")));
 builder.Services.AddNats(
@@ -14,10 +16,11 @@ builder.Services.AddNats(
                 Url = builder.Configuration["NATS:Url"] ?? NatsOpts.Default.Url,
                 Name = "Manufacturing.Inventory.Worker",
                 SerializerRegistry = new NatsJsonContextSerializerRegistry(
-                        InventoryGrabReplyV1JsonContext.Default,
                         InventoryGrabTaskV1JsonContext.Default,
                         InventoryReserveTaskV1JsonContext.Default,
                         InventoryReserveReplyV1JsonContext.Default,
+                        InventoryReleaseTaskV1JsonContext.Default,
+                        InventoryReleaseReplyV1JsonContext.Default,
                         InventoryDeliveredEventV1JsonContext.Default
                         ),
         });

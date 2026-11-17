@@ -1,16 +1,19 @@
 # Manufacturing Platform
 
-A distributed, event-driven manufacturing management platform built with **.NET 10**, **NATS JetStream**, **PostgreSQL**, **HotChocolate GraphQL (BFF)**, and **React 19**.
+A distributed, event-driven manufacturing management platform built with **.NET 11**, **NATS JetStream**, **PostgreSQL**, **HotChocolate GraphQL (BFF)**, and **React 19**.
 
 ---
 
 ## System Architecture
 
-The platform is built around a **Contract-First** messaging design for NATS JetStream and a **Backend-for-Frontend (GraphQL API Gateway)** pattern for the client application:
+The platform is built around **Contract-First** designs for NATS JetStream and the internal JSON APIs, and a **Backend-for-Frontend (GraphQL API Gateway)** pattern for the client application:
 
-- A single source-of-truth contract in [contracts/nats.contract.yaml](contracts/nats.contract.yaml) drives both:
-  1. **Roslyn Incremental Source Generator** (`Manufacturing.Nats.Contracts.Generator`) — generates the strongly typed `NatsContract` C# class at compile time with all streams, subjects, and durable consumers.
+- The messaging contract in [contracts/nats.contract.yaml](contracts/nats.contract.yaml) binds each subject to its DTO and transport and drives both:
+  1. **Roslyn Incremental Source Generator** (`Manufacturing.Nats.Contracts.Generator`) — generates `ProducerNatsClient`, `InventoryNatsClient`, and topology constants at compile time. Application code sends and reads messages through fixed, typed methods rather than choosing subjects and payload types independently.
   2. **Terraform** ([deploy/terraform/nats](deploy/terraform/nats)) — parses the exact same YAML file via the built-in `yamldecode` function to provision streams and durable consumers in NATS JetStream.
+- [contracts/producer-events.tsp](contracts/producer-events.tsp) defines `ProducerEventV1` and `ProducerEventType`. A pinned TypeSpec compiler and a local C# emitter generate the checked-in DTOs directly; no Roslyn intermediary or runtime Node.js dependency is involved. Other payload DTOs remain hand-written. See [generation commands](scripts/README.md#contract-code-generation).
+- [contracts/catalog.tsp](contracts/catalog.tsp) and [contracts/orders.tsp](contracts/orders.tsp) define the Catalog and Orders JSON APIs. The same emitter generates their DTO records, typed `CatalogClient`/`OrdersClient`, and server handler interfaces whose ASP.NET Core typed results fix each route's status codes and bodies. Errors are RFC 9457 `application/problem+json`. In Development each API serves its TypeSpec-emitted OpenAPI document at `/openapi/v1.json`.
+- Inventory reservation uses Core NATS request/reply with a queue-group responder; production tasks, inventory grabs, and events use JetStream. See [typed client usage and rollout](scripts/README.md#typed-nats-api-clients).
 
 ```mermaid
 flowchart TB
@@ -19,17 +22,18 @@ flowchart TB
     end
 
     subgraph BFF["API Gateway (BFF)"]
-        GW["Gateway.Api (.NET 10 + HotChocolate GraphQL)"]
+        GW["Gateway.Api (.NET 11 + HotChocolate GraphQL)"]
     end
 
-    subgraph Services["Microservices & Workers (.NET 10)"]
+    subgraph Services["Microservices & Workers (.NET 11)"]
         CAT["Catalog.Api (Minimal API)"]
         ORD["Orders.Api (Minimal API + Progress Tracker)"]
         INV["Inventory.Worker (BackgroundService)"]
         PROD["Producer.Worker (BackgroundService)"]
     end
 
-    subgraph Messaging["NATS JetStream"]
+    subgraph Messaging["NATS"]
+        CORE["Core request/reply: reserve.v1, release.v1"]
         JS_IC["Stream: INVENTORY_COMMANDS"]
         JS_IE["Stream: INVENTORY_EVENTS"]
         JS_PC["Stream: PRODUCTION_COMMANDS"]
@@ -45,18 +49,21 @@ flowchart TB
     subgraph Tooling["Contract-First & IaC"]
         YAML["contracts/nats.contract.yaml"]
         GEN["Roslyn Source Generator"]
+        TSP["contracts/*.tsp (TypeSpec)"]
+        CGEN["tools/Contracts.Generator"]
         TF["Terraform (yamldecode)"]
     end
 
     UI -- "GraphQL Query / Mutation (HTTP)" --> GW
     UI <-- "GraphQL Subscription (WebSocket)" --> GW
 
-    GW -- "REST (ICatalogClient)" --> CAT
-    GW -- "REST (IOrdersClient)" --> ORD
+    GW -- "REST (CatalogClient)" --> CAT
+    GW -- "REST (OrdersClient)" --> ORD
     JS_PE -- "Consumer: gateway-api-producer" --> GW
 
-    ORD -- "REST (ICatalogClient)" --> CAT
-    ORD -- "Request/Reply: reserve.v1" --> JS_IC
+    ORD -- "REST (CatalogClient)" --> CAT
+    ORD <-- "Request/Reply: reserve.v1" --> CORE
+    CORE <-- "Queue responder: inventory-worker" --> INV
     ORD -- "Publish: start.v1" --> JS_PC
     JS_PE -- "Consumer: orders-api-producer" --> ORD
 
@@ -73,10 +80,14 @@ flowchart TB
     INV --> DB_INV
 
     YAML -. "AdditionalFiles" .-> GEN
-    GEN -. "Generates NatsContract" .-> ORD
-    GEN -. "Generates NatsContract" .-> INV
-    GEN -. "Generates NatsContract" .-> PROD
-    GEN -. "Generates NatsContract" .-> GW
+    GEN -. "Generates typed clients" .-> ORD
+    GEN -. "Generates typed clients" .-> INV
+    GEN -. "Generates typed clients" .-> PROD
+    GEN -. "Generates typed clients" .-> GW
+    TSP -. "npm run generate" .-> CGEN
+    CGEN -. "DTOs, HTTP clients & handlers" .-> CAT
+    CGEN -. "DTOs, HTTP clients & handlers" .-> ORD
+    CGEN -. "HTTP clients" .-> GW
     YAML -. "yamldecode()" .-> TF
     TF -. "Provisioning" .-> Messaging
 ```
@@ -117,7 +128,7 @@ sequenceDiagram
 
     User->>GW: mutation createOrder(items)
     GW->>ORD: POST /api/orders
-    ORD->>CAT: GET /api/catalog/bom/{productId}
+    ORD->>CAT: GET /api/catalog/bill-of-material/{productId}/revisions/{revision}
     CAT-->>ORD: BillOfMaterial (revision & materials)
     Note over ORD: Persist deterministic BomSnapshot (SHA-256)<br/>Order status: Created -> WaitingForReserve
 
@@ -161,16 +172,19 @@ sequenceDiagram
 ```text
 manufacturing-platform/
 ├── contracts/
-│   └── nats.contract.yaml                  # Single source-of-truth NATS JetStream contract
+│   ├── catalog.tsp                         # Catalog JSON API contract (TypeSpec)
+│   ├── nats.contract.yaml                  # Single source-of-truth NATS JetStream contract
+│   ├── orders.tsp                          # Orders JSON API contract (TypeSpec)
+│   └── producer-events.tsp                 # ProducerEventV1 message model (TypeSpec)
 ├── deploy/
-│   ├── nats/init-jetstream.sh              # JetStream bootstrap script for Docker Compose
 │   ├── postgres/init.sql                   # Initializes Catalog, Orders, and Inventory databases
 │   └── terraform/nats/                     # Syncs NATS contract with JetStream via yamldecode
 ├── src/
 │   ├── Catalog.Api/                        # Catalog REST API (materials, products, BOM revisions)
-│   ├── Catalog.Api.Client/                 # Strongly typed HTTP client for Catalog.Api
+│   ├── Catalog.Contracts/                  # Generated Catalog DTOs and typed CatalogClient
 │   ├── Catalog.Core/                       # Catalog domain models
 │   ├── Orders.Api/                         # Orders REST API & OrderProgressTracker background service
+│   ├── Orders.Contracts/                   # Generated Orders DTOs and typed OrdersClient
 │   ├── Orders.Core/                        # Order domain models & deterministic BomSnapshot
 │   ├── Inventory.Contracts/                # Inventory messaging contracts
 │   ├── Inventory.DAL/                      # Inventory EF Core DbContext & migrations
@@ -183,9 +197,11 @@ manufacturing-platform/
 │   └── Web.Client/                         # Frontend (React 19, Vite, Tailwind CSS v4, Apollo Client)
 ├── tests/
 │   ├── Catalog.Seed.Tests/                 # Catalog seeder & generator tests
+│   ├── Inventory.Worker.Tests/             # PostgreSQL reserve/release/grab stock tests
 │   └── Orders.Core.Tests/                  # Unit tests for BomSnapshot hashing & order progress lifecycle
 ├── tools/
 │   ├── Catalog.Seed/                       # CLI tool for seeding catalog data
+│   ├── Contracts.Generator/                # TypeSpec → C# emitter (DTOs, HTTP clients/handlers, OpenAPI)
 │   └── Manufacturing.Nats.Contracts.Generator/ # Roslyn incremental source generator + test suite
 ├── docker-compose.yml                      # Full-stack Docker Compose setup
 └── ManufacturingPlatform.slnx              # Main solution file (.NET + .esproj)
@@ -197,32 +213,59 @@ manufacturing-platform/
 
 ### Option 1: Full Stack with Docker Compose (Recommended)
 
-Starts PostgreSQL, NATS JetStream, automatic stream/consumer initialization, EF Core startup migrations, all microservices, background workers, the GraphQL Gateway, and the React frontend:
+Requires Terraform 1.7+ in addition to Docker Compose. Provisioning is explicit:
+Terraform owns the NATS topology; containers do not create streams or consumers.
 
-```bash
-docker compose up --build
-```
+1. Start PostgreSQL and NATS:
+   ```bash
+   docker compose up -d postgres nats
+   ```
+2. Run the [local Terraform provisioning steps](scripts/README.md#nats-terraform-provisioning).
+   Existing Terraform state must be migrated first as described there.
+3. Only after a successful apply, start the applications:
+   ```bash
+   docker compose up --build
+   ```
 
 Once started, services are available at:
 - **Web UI (Control Center)**: [http://localhost:5173](http://localhost:5173)
 - **GraphQL Gateway & Nitro IDE**: [http://localhost:5150/graphql](http://localhost:5150/graphql)
 - **Catalog REST API**: `http://localhost:5142`
 - **Orders REST API**: `http://localhost:5139`
-- **NATS Monitoring**: `http://localhost:8222`
+- **NATS Monitoring**: `http://localhost:18222`
+- **PostgreSQL / NATS client** (host side): `localhost:15432` / `nats://localhost:14222`. The non-default
+  ports avoid silently reaching another local or Kubernetes-forwarded server on 5432/4222.
 
 ### Option 2: Local Development (IDE or CLI)
 
-1. Start the infrastructure services (PostgreSQL, NATS, and JetStream bootstrap):
+1. Start the infrastructure and provision NATS:
    ```bash
-   docker compose up -d postgres nats nats-init
+   docker compose up -d postgres nats
    ```
-   *(Alternatively, provision NATS via Terraform in `deploy/terraform/nats`: `terraform init && terraform apply`).*
+   Follow the [Terraform environment/state workflow](scripts/README.md#nats-terraform-provisioning)
+   before launching workers or APIs. Compose waits for NATS to start, not for
+   Terraform; provisioning is an operator/CI step.
 
 2. Build the solution and run unit tests:
    ```bash
    dotnet build ManufacturingPlatform.slnx
    dotnet test ManufacturingPlatform.slnx --filter "FullyQualifiedName!~PostgresIntegrationTests"
    ```
+   Inventory stock tests (reserve/release against PostgreSQL) are skipped unless
+   `INVENTORY_TEST_CONNECTION` points at a disposable server with `CREATEDB`; each run
+   creates and drops an `inventory_test_*` database:
+   ```bash
+   INVENTORY_TEST_CONNECTION='Host=localhost;Port=15432;Database=postgres;Username=postgres;Password=postgres' \
+     dotnet test tests/Inventory.Worker.Tests
+   ```
+   Orders cleanup integration tests additionally need `ORDERS_TEST_CONNECTION`
+   (same PostgreSQL requirements) and `ORDERS_TEST_NATS_URL` pointing at an
+   **isolated JetStream server**, not the application server: they own the
+   reserve/release subjects and temporarily create a production-task stream.
+   Without both variables these tests are skipped.
+
+   GraphQL revision fields and arguments now use `UnsignedInt`, not `Int`;
+   update explicit revision-variable declarations in external clients.
 
 3. Run the frontend dev server (proxies `/graphql` HTTP and WebSocket traffic to `http://localhost:5150`):
    ```bash

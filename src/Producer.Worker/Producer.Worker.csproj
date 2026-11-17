@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UserSecretsId>dotnet-Producer.Worker-269628c2-f319-4e87-b03d-fbe3179a5700</UserSecretsId>
@@ -13,6 +13,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <InternalsVisibleTo Include="Orders.Core.Tests" />
       <ProjectReference Include="..\Inventory.Contracts\Inventory.Contracts.csproj" />
       <ProjectReference Include="..\Manufacturing.Nats.Contract\Manufacturing.Nats.Contract.csproj" />
       <ProjectReference Include="..\Producer.Contracts\Producer.Contracts.csproj" />

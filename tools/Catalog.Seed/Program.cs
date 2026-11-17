@@ -1,5 +1,5 @@
+using Catalog.Contracts;
 using Catalog.Seed;
-using Manufacturing.Catalog.Client;
 
 try
 {

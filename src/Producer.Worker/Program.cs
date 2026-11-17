@@ -1,3 +1,4 @@
+using Manufacturing.Nats.Contract;
 using NATS.Client.Core;
 using NATS.Client.Hosting;
 using Producer.Worker;
@@ -19,6 +20,8 @@ builder.Services.AddNats(configureOpts: options =>
                                      ),
                              });
 builder.Services.AddHostedService<Worker>();
+builder.Services.AddSingleton<ProducerNatsClient>();
+builder.Services.AddSingleton<InventoryNatsClient>();
 
 var host = builder.Build();
 host.Run();

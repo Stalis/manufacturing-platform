@@ -5,5 +5,5 @@ resource "jetstream_stream" "streams" {
   subjects  = each.value.subjects
   retention = each.value.retention
   storage   = "file"
-  replicas  = 1
+  replicas  = var.stream_replicas
 }

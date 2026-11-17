@@ -10,6 +10,9 @@ namespace Manufacturing.Nats.Contracts.Generator;
 [Generator]
 public class NatsSubjectsGenerator : IIncrementalGenerator
 {
+    private static readonly DiagnosticDescriptor InvalidContract = new("NATS001", "Invalid NATS contract", "{0}",
+        "NatsContract", DiagnosticSeverity.Error, true);
+
     private record ContractYamlData(AdditionalText Text, string TargetNamespace);
     private record LinkedConsumer(string StreamName, NatsContractConfig.ConsumerConfig Consumer);
     
@@ -42,80 +45,95 @@ public class NatsSubjectsGenerator : IIncrementalGenerator
     
     private static void GenerateCode(SourceProductionContext context, ImmutableArray<ContractYamlData> files)
     {
-        foreach (var (additionalText, ns) in files)
+        var pending = new List<(string Name, string Source)>();
+        try
         {
-            var gotText = additionalText.GetText(context.CancellationToken)?.ToString();
-            if (string.IsNullOrWhiteSpace(gotText))
+            if (files.Length > 1)
+                throw new InvalidOperationException("Only one nats.contract.yaml may be supplied.");
+            foreach (var (additionalText, ns) in files)
             {
-                continue;
+                var gotText = additionalText.GetText(context.CancellationToken)?.ToString();
+                if (string.IsNullOrWhiteSpace(gotText))
+                    throw new InvalidOperationException("NATS contract is empty.");
+
+                var builder = new DeserializerBuilder()
+                    .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                    .WithDuplicateKeyChecking()
+                    .Build();
+                var config = builder.Deserialize<NatsContractConfig>(gotText!)
+                    ?? throw new InvalidOperationException("NATS contract is empty.");
+                TypedClients.Validate(config);
+
+                const string className = "NatsContract";
+
+                var allConsumersList = config.Services.SelectMany(kv =>
+                {
+                    var currentService = kv.Key;
+                    var commandConsumers = kv.Value.Streams.Commands.Consumers
+                        .Select(c => new LinkedConsumer(kv.Value.Streams.Commands.Name, new NatsContractConfig.ConsumerConfig
+                        {
+                            DurableName = c.DurableName,
+                            ForService = c.ForService ?? currentService,
+                            FilterSubjects = c.FilterSubjects,
+                        }));
+                    var eventConsumers = kv.Value.Streams.Events.Consumers
+                        .Select(c => new LinkedConsumer(kv.Value.Streams.Events.Name, new NatsContractConfig.ConsumerConfig
+                        {
+                            DurableName = c.DurableName,
+                            ForService = c.ForService ?? currentService,
+                            FilterSubjects = c.FilterSubjects,
+                        }));
+
+                    return commandConsumers.Concat(eventConsumers);
+                });
+
+                var consumersByServices = allConsumersList
+                    .GroupBy(v => v.Consumer.ForService!)
+                    .ToImmutableDictionary(g => g.Key, g => g.ToArray());
+
+                var allServiceNames = config.Services.Keys
+                    .Concat(consumersByServices.Keys)
+                    .Distinct();
+            
+                var serviceClassesLines = allServiceNames
+                    .SelectMany(serviceName => GenerateServiceClassLines(
+                        config.BaseSubject,
+                        serviceName,
+                        config.Services.TryGetValue(serviceName, out var service) ? service : null,
+                        consumersByServices.TryGetValue(serviceName, out var consumers)
+                            ? consumers
+                            : []));
+            
+                var mainClassLines = new List<string>
+                {
+                    $"public const string BaseSubject = \"{config.BaseSubject}\";",
+                };
+                mainClassLines.AddRange(serviceClassesLines);
+            
+                var sourceLines = new List<string>
+                {
+                    $"namespace {ns};",
+                    "",
+                    $"public static class {className}",
+                    "{",
+                };
+            
+                sourceLines.AddRange(mainClassLines.Select(v => v.Indent()));
+                sourceLines.Add("}");
+                sourceLines.Add("");
+            
+                pending.Add(($"{className}.g.cs", string.Join("\n", sourceLines)));
+                pending.Add(("NatsClients.g.cs", TypedClients.Generate(config, ns)));
             }
-            
-            var builder = new DeserializerBuilder()
-                .WithNamingConvention(UnderscoredNamingConvention.Instance)
-                .Build();
-            var config = builder.Deserialize<NatsContractConfig>(gotText!);
-
-            const string className = "NatsContract";
-
-            var allConsumersList = config.Services.SelectMany(kv =>
-            {
-                var currentService = kv.Key;
-                var commandConsumers = kv.Value.Streams.Commands.Consumers
-                    .Select(c => new LinkedConsumer(kv.Value.Streams.Commands.Name, new NatsContractConfig.ConsumerConfig
-                    {
-                        DurableName = c.DurableName,
-                        ForService = c.ForService ?? currentService,
-                        FilterSubjects = c.FilterSubjects,
-                    }));
-                var eventConsumers = kv.Value.Streams.Events.Consumers
-                    .Select(c => new LinkedConsumer(kv.Value.Streams.Events.Name, new NatsContractConfig.ConsumerConfig
-                    {
-                        DurableName = c.DurableName,
-                        ForService = c.ForService ?? currentService,
-                        FilterSubjects = c.FilterSubjects,
-                    }));
-
-                return commandConsumers.Concat(eventConsumers);
-            });
-
-            var consumersByServices = allConsumersList
-                .GroupBy(v => v.Consumer.ForService!)
-                .ToImmutableDictionary(g => g.Key, g => g.ToArray());
-
-            var allServiceNames = config.Services.Keys
-                .Concat(consumersByServices.Keys)
-                .Distinct();
-            
-            var serviceClassesLines = allServiceNames
-                .SelectMany(serviceName => GenerateServiceClassLines(
-                    config.BaseSubject,
-                    serviceName,
-                    config.Services.TryGetValue(serviceName, out var service) ? service : null,
-                    consumersByServices.TryGetValue(serviceName, out var consumers)
-                        ? consumers
-                        : []));
-            
-            var mainClassLines = new List<string>
-            {
-                $"public const string BaseSubject = \"{config.BaseSubject}\";",
-            };
-            mainClassLines.AddRange(serviceClassesLines);
-            
-            var sourceLines = new List<string>
-            {
-                $"namespace {ns};",
-                "",
-                $"public static class {className}",
-                "{",
-            };
-            
-            sourceLines.AddRange(mainClassLines.Select(v => v.Indent()));
-            sourceLines.Add("}");
-            sourceLines.Add("");
-            
-            context.AddSource($"{className}.g.cs",
-                SourceText.From(string.Join("\n", [.. sourceLines]), Encoding.UTF8));
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(InvalidContract, Location.None, ex.Message));
+            return;
+        }
+
+        foreach (var (name, source) in pending)
+            context.AddSource(name, SourceText.From(source, Encoding.UTF8));
     }
 
     private static IEnumerable<string> GenerateServiceClassLines(
@@ -173,7 +191,7 @@ public class NatsSubjectsGenerator : IIncrementalGenerator
             "{",
         };
         var subjects = streamConfig.Subjects
-            .Select(kv => $"""public const string {kv.Key.ToPascalCase()} = "{baseSubject}.{kv.Value}";""")
+            .Select(kv => $"""public const string {kv.Key.ToPascalCase()} = "{baseSubject}.{kv.Value.Subject}";""")
             .Select(v => v.Indent(4));
         
         result.AddRange(subjects);

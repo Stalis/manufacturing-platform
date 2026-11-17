@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Manufacturing.Core.Models;
+using Catalog.Contracts;
 
 namespace Catalog.Seed;
 
@@ -20,7 +20,7 @@ public sealed record Microcontrollers(MeasurementUnit MeasurementUnit, int[] Cor
 
 public sealed record SeedItem(string Sku, int Quantity);
 
-public sealed record SeedProduct(string Sku, string Name, SeedItem[] Materials, int Revision = 1);
+public sealed record SeedProduct(string Sku, string Name, SeedItem[] Materials, uint Revision = 1);
 
 public sealed record SeedMaterial(string Sku, string Name, MeasurementUnit MeasurementUnit);
 

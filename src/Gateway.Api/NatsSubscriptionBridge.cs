@@ -1,31 +1,21 @@
-using Gateway.Api.Clients;
 using Gateway.Api.GraphQL;
 using HotChocolate.Subscriptions;
 using Manufacturing.Nats.Contract;
-using NATS.Client.Core;
-using NATS.Net;
-using Producer.Contracts.Models;
+using Orders.Contracts;
 
 namespace Gateway.Api;
 
 public sealed class NatsSubscriptionBridge(
     ILogger<NatsSubscriptionBridge> logger,
-    INatsConnection nats,
+    ProducerNatsClient producer,
     ITopicEventSender eventSender,
-    IOrdersClient ordersClient) : BackgroundService
+    OrdersClient ordersClient) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
-            var js = nats.CreateJetStreamContext();
-
-            var consumer = await js.GetConsumerAsync(
-                NatsContract.Gateway.GatewayApiProducerConsumer.StreamName,
-                NatsContract.Gateway.GatewayApiProducerConsumer.DurableName,
-                stoppingToken);
-
-            await foreach (var message in consumer.ConsumeAsync<ProducerEventV1>(cancellationToken: stoppingToken))
+            await foreach (var message in producer.ReadGatewayApiProducerAsync(stoppingToken))
             {
                 if (message.Data is not { } producerEvent)
                 {
@@ -38,11 +28,8 @@ public sealed class NatsSubscriptionBridge(
                     // Allow Orders.Api a brief moment to commit the updated task status
                     await Task.Delay(50, stoppingToken);
 
-                    var allOrders = await ordersClient.GetAllOrdersAsync(stoppingToken);
-                    var matchingOrder = allOrders.FirstOrDefault(o =>
-                        o.Items.Any(i => i.Tasks.Any(t => t.TaskId == producerEvent.TaskId)));
-
-                    var gqlOrder = matchingOrder is null ? null : OrderGql.FromCore(matchingOrder);
+                    var order = await ordersClient.GetOrderByTaskAsync(producerEvent.TaskId, stoppingToken).OrNotFound();
+                    var gqlOrder = order is null ? null : OrderGql.FromContract(order);
 
                     if (gqlOrder is not null)
                     {

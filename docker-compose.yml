@@ -6,7 +6,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      # Non-default host ports: a local install or a Kubernetes-forwarded server often already owns 5432/4222/8222.
+      - "15432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./deploy/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -21,19 +22,8 @@ services:
     container_name: manufacturing-nats
     command: ["-js", "-m", "8222"]
     ports:
-      - "4222:4222"
-      - "8222:8222"
-
-  nats-init:
-    image: natsio/nats-box:latest
-    container_name: manufacturing-nats-init
-    depends_on:
-      - nats
-    environment:
-      NATS_URL: "nats://nats:4222"
-    volumes:
-      - ./deploy/nats/init-jetstream.sh:/init-jetstream.sh:ro
-    entrypoint: ["/bin/sh", "/init-jetstream.sh"]
+      - "14222:4222"
+      - "18222:8222"
 
   catalog-api:
     build:
@@ -58,8 +48,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      nats-init:
-        condition: service_completed_successfully
+      nats:
+        condition: service_started
     environment:
       DOTNET_ENVIRONMENT: Development
       ConnectionStrings__Inventory: "Host=postgres;Port=5432;Database=Inventory;Username=inventory-api;Password=inventory-api"
@@ -72,8 +62,8 @@ services:
       dockerfile: src/Producer.Worker/Dockerfile
     container_name: manufacturing-producer-worker
     depends_on:
-      nats-init:
-        condition: service_completed_successfully
+      nats:
+        condition: service_started
     environment:
       DOTNET_ENVIRONMENT: Development
       NATS__Url: "nats://nats:4222"
@@ -86,8 +76,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      nats-init:
-        condition: service_completed_successfully
+      nats:
+        condition: service_started
       catalog-api:
         condition: service_started
     environment:
@@ -105,8 +95,8 @@ services:
       dockerfile: src/Gateway.Api/Dockerfile
     container_name: manufacturing-gateway-api
     depends_on:
-      nats-init:
-        condition: service_completed_successfully
+      nats:
+        condition: service_started
       catalog-api:
         condition: service_started
       orders-api:

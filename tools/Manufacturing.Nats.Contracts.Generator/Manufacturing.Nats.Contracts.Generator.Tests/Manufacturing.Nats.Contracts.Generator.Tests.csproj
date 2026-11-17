@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net11.0</TargetFramework>
         <Nullable>enable</Nullable>
 
         <IsPackable>false</IsPackable>
@@ -10,10 +10,12 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="coverlet.collector"/>
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp"/>
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces"/>
         <PackageReference Include="Microsoft.NET.Test.Sdk"/>
         <PackageReference Include="xunit"/>
+        <PackageReference Include="NATS.Net"/>
         <PackageReference Include="xunit.runner.visualstudio">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
@@ -22,6 +24,8 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Manufacturing.Nats.Contracts.Generator\Manufacturing.Nats.Contracts.Generator.csproj"/>
+        <ProjectReference Include="..\..\..\src\Producer.Contracts\Producer.Contracts.csproj"/>
+        <ProjectReference Include="..\..\..\src\Inventory.Contracts\Inventory.Contracts.csproj"/>
     </ItemGroup>
 
 

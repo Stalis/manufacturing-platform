@@ -4,18 +4,16 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
-
 builder.Services.AddDbContext<CatalogDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("Catalog")
     )
 );
+builder.Services.AddCatalogEndpoints();
 
 var app = builder.Build();
 
-if (!EF.IsDesignTime &&
-    System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name != "GetDocument.Insider")
+if (!EF.IsDesignTime)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
@@ -25,7 +23,8 @@ if (!EF.IsDesignTime &&
     }
 }
 
-if (app.Environment.IsDevelopment()) app.MapOpenApi();
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 
 app.MapCatalogEndpoints();
 

@@ -2,18 +2,18 @@ namespace Catalog.Api.Endpoints;
 
 public static class CatalogEndpoints
 {
-    public static IEndpointRouteBuilder MapCatalogEndpoints(
-        this IEndpointRouteBuilder app
-    )
+    public static IServiceCollection AddCatalogEndpoints(this IServiceCollection services)
     {
-        var group = app.MapGroup("/api/catalog")
-                       .AddEndpointFilter<CatalogConflictFilter>()
-                       .WithTags("Catalog");
+        services.AddCatalogApi();
+        services.AddScoped<IMaterialsHandler, MaterialsHandler>();
+        services.AddScoped<IProductsHandler, ProductsHandler>();
+        services.AddScoped<IBillsOfMaterialHandler, BillsOfMaterialHandler>();
+        return services;
+    }
 
-        group.MapMaterialsEndpoints();
-        group.MapProductsEndpoints();
-        group.MapBillOfMaterialEndpoints();
-
+    public static IEndpointRouteBuilder MapCatalogEndpoints(this IEndpointRouteBuilder app)
+    {
+        app.MapCatalogApi().AddEndpointFilter<CatalogConflictFilter>();
         return app;
     }
 }

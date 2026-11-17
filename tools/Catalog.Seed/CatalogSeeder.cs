@@ -1,21 +1,22 @@
-using Manufacturing.Catalog.Client;
+using System.Net;
+using Catalog.Contracts;
 
 namespace Catalog.Seed;
 
-public sealed class CatalogSeeder(ICatalogClient client, TextWriter output)
+public sealed class CatalogSeeder(CatalogClient client, TextWriter output)
 {
     public async Task RunAsync(SeedCatalog seed, bool productsOnly = false, bool dryRun = false,
                                CancellationToken ct = default)
     {
         seed.Validate();
-        var materials = SeedCatalog.Index(await client.GetAllMaterialsAsync(ct), m => m.Sku, "remote materials");
-        var products = SeedCatalog.Index(await client.GetAllProductsAsync(ct), p => p.Sku, "remote products");
+        var materials = SeedCatalog.Index(await client.ListMaterialsAsync(ct), m => m.Sku, "remote materials");
+        var products = SeedCatalog.Index(await client.ListProductsAsync(ct), p => p.Sku, "remote products");
         var desiredMaterials = seed.Materials.ToDictionary(m => m.Sku);
         if (productsOnly)
             foreach (var sku in seed.Products.SelectMany(p => p.Materials).Select(m => m.Sku).Distinct())
             {
                 SeedCatalog.Check(materials.TryGetValue(sku, out var material), $"Missing remote material: {sku}");
-                SeedCatalog.Check(material.MeasurementUnit == (int)desiredMaterials[sku].MeasurementUnit,
+                SeedCatalog.Check(material.MeasurementUnit == desiredMaterials[sku].MeasurementUnit,
                                   $"Measurement unit mismatch: {sku}");
             }
 
@@ -27,14 +28,14 @@ public sealed class CatalogSeeder(ICatalogClient client, TextWriter output)
             if (products.TryGetValue(product.Sku, out var existing))
                 try
                 {
-                    bom = await client.GetBillOfMaterialByProductIdAndRevisionAsync(existing.Id, product.Revision, ct);
+                    bom = await client.GetBillOfMaterialAsync(existing.Id, product.Revision, ct);
                 }
-                catch (ApiException error) when (error.StatusCode == 404)
+                catch (HttpRequestException error) when (error.StatusCode == HttpStatusCode.NotFound)
                 {
                 }
 
             if (bom is not null)
-                SeedCatalog.Check(bom.Materials.Select(m => m.MaterialId).Distinct().Count() == bom.Materials.Count,
+                SeedCatalog.Check(bom.Materials.Select(m => m.MaterialId).Distinct().Count() == bom.Materials.Length,
                                   $"Duplicate material in remote BOM: {product.Sku}");
             boms.Add(product.Sku, bom);
         }
@@ -51,21 +52,15 @@ public sealed class CatalogSeeder(ICatalogClient client, TextWriter output)
                     materials.TryGetValue(desired.Sku, out var existing);
                     var action = existing is null ? "create" :
                         existing.Name != desired.Name
-                        || existing.MeasurementUnit != (int)desired.MeasurementUnit ? "update" : "unchanged";
+                        || existing.MeasurementUnit != desired.MeasurementUnit ? "update" : "unchanged";
                     operation = $"{action} material {desired.Sku}";
                     Report(materialCounts, action, operation);
                     if (dryRun || action == "unchanged") continue;
+                    var input = new MaterialInput(desired.Sku, desired.Name, desired.MeasurementUnit);
                     if (existing is null)
-                        materials.Add(desired.Sku, await client.CreateMaterialAsync(new CreateMaterialRequest
-                        {
-                            Sku = desired.Sku, Name = desired.Name, MeasurementUnit = (int)desired.MeasurementUnit,
-                        }, ct));
+                        materials.Add(desired.Sku, await client.CreateMaterialAsync(input, ct));
                     else
-                        await client.UpdateMaterialAsync(new UpdateMaterialRequest
-                        {
-                            Id = existing.Id, Sku = desired.Sku, Name = desired.Name,
-                            MeasurementUnit = (int)desired.MeasurementUnit,
-                        }, ct);
+                        await client.ReplaceMaterialAsync(existing.Id, input, ct);
                 }
 
             foreach (var desired in seed.Products)
@@ -77,17 +72,13 @@ public sealed class CatalogSeeder(ICatalogClient client, TextWriter output)
                 if (!dryRun)
                 {
                     if (existing is null)
-                        existing = await client.CreateProductAsync(
-                            new CreateProductRequest { Sku = desired.Sku, Name = desired.Name }, ct);
+                        existing = await client.CreateProductAsync(new ProductInput(desired.Sku, desired.Name), ct);
                     else if (action == "update")
-                        await client.UpdateProductAsync(existing.Id, new UpdateProductRequest
-                        {
-                            Id = existing.Id, Sku = desired.Sku, Name = desired.Name,
-                        }, ct);
+                        await client.ReplaceProductAsync(existing.Id, new ProductInput(desired.Sku, desired.Name), ct);
                 }
 
                 var currentBom = boms[desired.Sku];
-                var equal = currentBom is not null && currentBom.Materials.Count == desired.Materials.Length
+                var equal = currentBom is not null && currentBom.Materials.Length == desired.Materials.Length
                                                    && desired.Materials.All(item =>
                                                                                 materials.TryGetValue(
                                                                                     item.Sku, out var material)
@@ -100,23 +91,18 @@ public sealed class CatalogSeeder(ICatalogClient client, TextWriter output)
                 operation = $"{bomAction} BOM {desired.Sku}";
                 Report(bomCounts, bomAction, operation);
                 if (dryRun || equal) continue;
-                var bom = new BillOfMaterial
-                {
-                    ProductId = existing!.Id,
-                    Revision = desired.Revision,
-                    Materials = desired.Materials.Select(item => new Record
-                    {
-                        MaterialId = materials[item.Sku].Id, Quantity = item.Quantity,
-                    }).ToArray(),
-                };
+                var bom = new BillOfMaterial(
+                    existing!.Id,
+                    desired.Revision,
+                    desired.Materials.Select(item => new BillOfMaterialItem(materials[item.Sku].Id, item.Quantity))
+                           .ToArray());
                 if (currentBom is null) await client.CreateBillOfMaterialAsync(bom, ct);
                 else await client.ReplaceBillOfMaterialAsync(bom, ct);
             }
         }
-        catch (ApiException error)
+        catch (HttpRequestException error) when (error.StatusCode is { } status)
         {
-            throw new InvalidOperationException($"Failed to {operation}: HTTP {error.StatusCode}. {error.Response}",
-                                                error);
+            throw new InvalidOperationException($"Failed to {operation}: HTTP {(int)status}. {error.Message}", error);
         }
         catch (HttpRequestException error)
         {
